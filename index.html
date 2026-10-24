@@ -1,0 +1,1588 @@
+<!doctype html>
+<html lang="kk">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>LinguaVoice AI — дауыстық аудармашы</title>
+<meta name="description" content="LinguaVoice AI: Gemini және Microsoft Edge TTS негізіндегі жылдам дауыстық аудармашы">
+<meta name="theme-color" content="#3D6BFF">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%233D6BFF'/%3E%3Cstop offset='1' stop-color='%237A4DFF'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='64' height='64' rx='16' fill='url(%23g)'/%3E%3Cpath d='M20 26v12M28 20v24M36 24v16M44 29v6' stroke='white' stroke-width='5' stroke-linecap='round'/%3E%3C/svg%3E">
+
+<script>
+/* =====================================================================
+   LinguaVoice AI — CONFIGURATION (the only thing you need to edit)
+   ---------------------------------------------------------------------
+   API_BASE_URL : the HTTPS address of YOUR deployed FastAPI backend,
+                  e.g. "https://linguavoice-backend.onrender.com"
+                  (no trailing slash, no /api, no /ws).
+                  The Gemini API key is NOT put here — it lives only on
+                  the backend as the GEMINI_API_KEY environment variable.
+   Other values are optional tuning.
+   ===================================================================== */
+const CONFIG = {
+  API_BASE_URL: "https://YOUR-BACKEND-URL.example",
+  REQUEST_TIMEOUT_MS: 30000,      // max wait for a translation / for the voice
+  DEFAULT_SILENCE_MS: 500,        // end-of-speech pause (250–1200 ms, user-adjustable)
+  MAX_RECORDING_MS: 60000,        // hard cap for one utterance
+  NO_SPEECH_TIMEOUT_MS: 8000,     // stop listening if nobody speaks
+  HISTORY_LIMIT: 300              // local history entries kept in this browser
+};
+</script>
+
+<style>
+:root{
+  --bg:#F3F5FB; --bg-glow:rgba(122,77,255,.10); --surface:#FFFFFF; --surface-2:#EEF1F9; --surface-3:#E4E8F4;
+  --text:#121630; --muted:#5D6587; --faint:#8B93B3; --border:#E1E5F0;
+  --blue:#3D6BFF; --violet:#7A4DFF; --grad:linear-gradient(135deg,#3D6BFF 0%,#7A4DFF 100%);
+  --blue-soft:rgba(61,107,255,.12); --violet-soft:rgba(122,77,255,.12);
+  --danger:#E5484D; --danger-soft:rgba(229,72,77,.12); --ok:#1F9D63; --warn:#C98A00;
+  --shadow:0 1px 2px rgba(18,22,48,.06),0 8px 24px rgba(18,22,48,.07);
+  --shadow-lg:0 12px 40px rgba(40,40,120,.22);
+  --radius:20px; --radius-sm:14px;
+  --dock-h:188px;
+  color-scheme:light;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --bg:#0B0E1C; --bg-glow:rgba(122,77,255,.16); --surface:#151A2E; --surface-2:#1C2240; --surface-3:#252C52;
+    --text:#E9ECFA; --muted:#A0A8CC; --faint:#6E77A0; --border:#262D50;
+    --blue-soft:rgba(91,131,255,.18); --violet-soft:rgba(140,100,255,.18);
+    --shadow:0 1px 2px rgba(0,0,0,.4),0 10px 30px rgba(0,0,0,.35); --shadow-lg:0 14px 44px rgba(0,0,0,.55);
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0B0E1C; --bg-glow:rgba(122,77,255,.16); --surface:#151A2E; --surface-2:#1C2240; --surface-3:#252C52;
+  --text:#E9ECFA; --muted:#A0A8CC; --faint:#6E77A0; --border:#262D50;
+  --blue-soft:rgba(91,131,255,.18); --violet-soft:rgba(140,100,255,.18);
+  --shadow:0 1px 2px rgba(0,0,0,.4),0 10px 30px rgba(0,0,0,.35); --shadow-lg:0 14px 44px rgba(0,0,0,.55);
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
+body{
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Noto Sans","Helvetica Neue",Arial,sans-serif;
+  background:radial-gradient(900px 500px at 85% -10%,var(--bg-glow),transparent 60%),var(--bg);
+  background-attachment:fixed;color:var(--text);min-height:100vh;min-height:100dvh;
+  overflow-x:hidden;-webkit-tap-highlight-color:transparent;line-height:1.45;
+}
+button,input,select{font:inherit;color:inherit}
+button{cursor:pointer;border:0;background:none;touch-action:manipulation}
+button:focus-visible,select:focus-visible,input:focus-visible{outline:3px solid var(--blue);outline-offset:2px}
+[hidden]{display:none!important}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+svg{display:block}
+
+/* ---------- header ---------- */
+.topbar{position:sticky;top:0;z-index:20;display:flex;align-items:center;gap:10px;justify-content:space-between;
+  padding:calc(10px + env(safe-area-inset-top)) 16px 10px;background:var(--bg);background:color-mix(in srgb,var(--bg) 82%,transparent);
+  -webkit-backdrop-filter:saturate(1.4) blur(14px);backdrop-filter:saturate(1.4) blur(14px);border-bottom:1px solid transparent}
+.brand{display:flex;align-items:center;gap:10px;min-width:0}
+.logo{width:40px;height:40px;border-radius:12px;background:var(--grad);display:grid;place-items:center;flex:0 0 auto;box-shadow:0 6px 16px rgba(80,90,255,.35)}
+.brand h1{font-size:18px;margin:0;letter-spacing:-.01em;white-space:nowrap}
+.brand h1 span{background:var(--grad);-webkit-background-clip:text;background-clip:text;color:transparent}
+.brand-text{min-width:0}
+.subline{display:flex;align-items:center;gap:6px;min-width:0}
+.tagline{color:var(--muted);font-size:12px;white-space:nowrap}
+.top-actions{display:flex;align-items:center;gap:2px;flex:0 0 auto}
+.icon-btn{width:44px;height:44px;border-radius:14px;display:grid;place-items:center;color:var(--muted)}
+.icon-btn:hover{background:var(--surface-2);color:var(--text)}
+.conn{display:inline-flex;align-items:center;gap:5px;font-size:12px;color:var(--muted);min-width:0}
+.conn span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.conn i{width:8px;height:8px;border-radius:50%;background:var(--faint);flex:0 0 auto}
+.conn[data-state="online"] i{background:var(--ok);box-shadow:0 0 0 3px rgba(31,157,99,.18)}
+.conn[data-state="connecting"] i{background:var(--warn);animation:blink 1s infinite}
+.conn[data-state="offline"] i,.conn[data-state="unconfigured"] i{background:var(--danger)}
+@keyframes blink{50%{opacity:.3}}
+
+/* ---------- layout ---------- */
+main{width:100%;max-width:760px;margin:0 auto;padding:6px 16px calc(var(--dock-h) + 24px + env(safe-area-inset-bottom))}
+.banner{max-width:760px;margin:8px auto 0;padding:0 16px}
+.banner .inner{display:flex;gap:10px;align-items:flex-start;background:var(--danger-soft);color:var(--text);border:1px solid color-mix(in srgb,var(--danger) 35%,transparent);
+  border-radius:var(--radius-sm);padding:12px 14px;font-size:14px}
+.banner .inner b{color:var(--danger)}
+.banner code{font-size:12.5px;background:var(--surface);padding:1px 6px;border-radius:6px;word-break:break-all}
+.tabs{display:grid;grid-template-columns:1fr 1fr;background:var(--surface-2);padding:4px;border-radius:16px;margin:4px 0 14px;position:relative}
+.tabs button{height:42px;border-radius:12px;font-weight:600;color:var(--muted);transition:background .2s,color .2s}
+.tabs button[aria-selected="true"]{background:var(--surface);color:var(--text);box-shadow:var(--shadow)}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow)}
+
+/* language bar */
+.langbar{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);align-items:center;gap:6px;padding:8px;margin-bottom:14px}
+.lang-btn{min-height:60px;padding:8px 12px;border-radius:14px;text-align:left;display:flex;flex-direction:column;justify-content:center;min-width:0;transition:background .15s}
+.lang-btn:hover{background:var(--surface-2)}
+.lang-btn small{font-size:11.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+.lang-btn span{font-weight:650;font-size:16px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:flex;align-items:center;gap:6px}
+.lang-btn span::after{content:"";width:7px;height:7px;border-right:2px solid var(--faint);border-bottom:2px solid var(--faint);transform:rotate(45deg) translateY(-2px);flex:0 0 auto}
+.swap{width:46px;height:46px;border-radius:50%;display:grid;place-items:center;background:var(--surface-2);color:var(--blue);transition:transform .25s}
+.swap:hover{background:var(--blue-soft)}
+.swap.spin{transform:rotate(180deg)}
+
+/* text cards */
+.grid2{display:grid;gap:14px}
+.text-card{padding:14px 16px 16px;min-width:0}
+.text-card > header{display:flex;align-items:center;gap:8px;margin-bottom:6px;min-height:36px}
+.text-card h2{font-size:13px;margin:0;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;font-weight:650}
+.chip{font-size:12px;padding:3px 9px;border-radius:999px;background:var(--blue-soft);color:var(--blue);font-weight:600;white-space:nowrap}
+.spacer{flex:1}
+.copy-btn{width:38px;height:38px;border-radius:12px;display:grid;place-items:center;color:var(--muted)}
+.copy-btn:hover{background:var(--surface-2);color:var(--text)}
+.text{margin:0;font-size:17px;min-height:52px;white-space:pre-wrap;overflow-wrap:anywhere}
+.text.big{font-size:21px;font-weight:550;line-height:1.38}
+.text:empty::before{content:attr(data-placeholder);color:var(--faint);font-weight:400;font-size:16px}
+.text.live::after{content:"";display:inline-block;width:2px;height:1em;background:var(--violet);margin-left:2px;vertical-align:-2px;animation:blink .8s infinite}
+.accent{border-color:var(--border);border-color:color-mix(in srgb,var(--violet) 30%,var(--border));background:var(--surface);background:linear-gradient(180deg,color-mix(in srgb,var(--violet) 6%,var(--surface)),var(--surface) 70%)}
+.player{display:flex;gap:8px;margin-top:14px;flex-wrap:wrap}
+.pill{height:44px;padding:0 16px;border-radius:999px;display:inline-flex;align-items:center;gap:8px;font-weight:600;background:var(--surface-2);transition:filter .15s,background .15s}
+.pill:hover{filter:brightness(1.04);background:var(--surface-3)}
+.pill.primary{background:var(--grad);color:#fff;box-shadow:0 6px 16px rgba(80,90,255,.3)}
+.pill:disabled{opacity:.45;cursor:not-allowed;filter:none}
+.voice-row{display:grid;grid-template-columns:1fr;gap:12px;margin-top:14px;padding-top:14px;border-top:1px dashed var(--border)}
+.field{display:flex;flex-direction:column;gap:6px;font-size:13px;color:var(--muted);min-width:0}
+.field-head{display:flex;justify-content:space-between;gap:8px}
+.field output{color:var(--text);font-weight:600;font-variant-numeric:tabular-nums}
+select{width:100%;height:44px;border-radius:12px;border:1px solid var(--border);background:var(--surface-2);padding:0 12px;color:var(--text);font-size:15px;min-width:0}
+input[type=range]{width:100%;accent-color:var(--violet);height:28px}
+
+/* metrics */
+.metrics{margin-top:14px;padding:12px 16px}
+.metrics h3{margin:0 0 8px;font-size:13px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
+.metrics dl{display:grid;grid-template-columns:1fr auto;gap:6px 12px;margin:0;font-size:14px}
+.metrics dt{color:var(--muted)} .metrics dd{margin:0;text-align:right;font-variant-numeric:tabular-nums;font-weight:600}
+.metrics dd.total{color:var(--violet)}
+
+/* conversation */
+.conv-langs{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);gap:4px;align-items:center;padding:8px;margin-bottom:12px}
+.speaker{display:flex;align-items:center;gap:4px;min-width:0}
+.speaker .lang-btn{flex:1;min-width:0;padding:8px 6px}
+.speaker.b{flex-direction:row-reverse}
+.speaker.b .lang-btn{text-align:right;align-items:flex-end}
+.badge{width:30px;height:30px;border-radius:50%;display:grid;place-items:center;color:#fff;font-weight:700;font-size:14px;flex:0 0 auto}
+.badge.a{background:var(--blue)} .badge.b{background:var(--violet)}
+.chat{display:flex;flex-direction:column;gap:10px;min-height:200px}
+.chat .empty{color:var(--muted);text-align:center;padding:32px 20px;font-size:15px;border:1px dashed var(--border);border-radius:var(--radius)}
+.bubble{max-width:88%;padding:10px 14px 8px;border-radius:18px;background:var(--surface);border:1px solid var(--border);box-shadow:var(--shadow);animation:pop .22s ease-out}
+.bubble.a{align-self:flex-start;border-bottom-left-radius:6px;border-left:3px solid var(--blue)}
+.bubble.b{align-self:flex-end;border-bottom-right-radius:6px;border-right:3px solid var(--violet)}
+.b-meta{font-size:11.5px;color:var(--muted);margin-bottom:2px}
+.b-src{margin:0;font-size:14px;color:var(--muted);white-space:pre-wrap;overflow-wrap:anywhere}
+.b-tr{margin:4px 0 0;font-size:18px;font-weight:560;white-space:pre-wrap;overflow-wrap:anywhere}
+.b-tr:empty::before{content:"…";color:var(--faint)}
+.b-actions{display:flex;gap:2px;justify-content:flex-end;margin-top:4px}
+.b-actions button{width:36px;height:36px;border-radius:10px;display:grid;place-items:center;color:var(--muted)}
+.b-actions button:hover{background:var(--surface-2);color:var(--text)}
+.bubble.err .b-tr{color:var(--danger);font-size:14px;font-weight:500}
+@keyframes pop{from{opacity:0;transform:translateY(6px) scale(.98)}to{opacity:1;transform:none}}
+
+/* ---------- dock ---------- */
+.dock{position:fixed;left:0;right:0;bottom:0;z-index:30;padding:10px 16px calc(12px + env(safe-area-inset-bottom));
+  background:var(--bg);background:color-mix(in srgb,var(--bg) 86%,transparent);-webkit-backdrop-filter:blur(16px);backdrop-filter:blur(16px);border-top:1px solid var(--border)}
+.dock-inner{max-width:760px;margin:0 auto;display:flex;flex-direction:column;align-items:center;gap:8px}
+.status{display:flex;align-items:center;gap:8px;font-size:15px;font-weight:600;min-height:22px;text-align:center;max-width:100%}
+.status .dot{width:9px;height:9px;border-radius:50%;background:var(--ok);flex:0 0 auto}
+.status[data-kind="listening"] .dot{background:var(--danger);animation:blink 1s infinite}
+.status[data-kind="busy"] .dot{background:var(--violet);animation:blink .7s infinite}
+.status[data-kind="playing"] .dot{background:var(--blue);animation:blink 1.2s infinite}
+.status[data-kind="error"]{color:var(--danger)} .status[data-kind="error"] .dot{background:var(--danger)}
+.status[data-kind="idle"] .dot{background:var(--faint)}
+.mic-row{display:flex;align-items:center;justify-content:center;gap:22px;width:100%}
+.mini{width:52px;height:52px;border-radius:50%;display:grid;place-items:center;background:var(--surface);border:1px solid var(--border);box-shadow:var(--shadow);color:var(--text)}
+.mini.ghost{visibility:hidden}
+.mini:hover{background:var(--surface-2)}
+.mic{--level:0;position:relative;width:92px;height:92px;border-radius:50%;background:var(--grad);color:#fff;display:grid;place-items:center;
+  box-shadow:0 10px 28px rgba(80,90,255,.42);transition:transform .15s,box-shadow .2s}
+.mic:active{transform:scale(.96)}
+.mic .ico-stop{display:none}
+.mic::before,.mic::after{content:"";position:absolute;inset:0;border-radius:50%;pointer-events:none;opacity:0}
+.mic[data-state="listening"]{background:linear-gradient(135deg,#FF4D6D,#7A4DFF)}
+.mic[data-state="listening"] .ico-mic{display:none}
+.mic[data-state="listening"] .ico-stop{display:block}
+.mic[data-state="listening"]::before{opacity:1;border:3px solid rgba(255,77,109,.45);transform:scale(calc(1.08 + var(--level)*.45));transition:transform .08s linear}
+.mic[data-state="listening"]::after{opacity:1;background:rgba(122,77,255,.16);transform:scale(calc(1.15 + var(--level)*.8));transition:transform .1s linear;z-index:-1}
+.mic[data-state="listening"][data-speech="0"]::after{animation:breathe 1.6s ease-in-out infinite}
+.mic[data-state="busy"]::before{opacity:1;inset:-6px;border:3px solid transparent;border-top-color:var(--violet);border-right-color:var(--blue);animation:spin .9s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+@keyframes breathe{50%{transform:scale(1.28);opacity:.5}}
+.dock-conv{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);gap:12px;width:100%;align-items:center}
+.spk{min-height:84px;border-radius:22px;color:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;padding:8px;
+  box-shadow:0 8px 22px rgba(60,70,200,.3);position:relative;overflow:hidden;transition:transform .12s}
+.spk:active{transform:scale(.97)}
+.spk.a{background:linear-gradient(135deg,#3D6BFF,#5A7DFF)} .spk.b{background:linear-gradient(135deg,#6A45F5,#8E5CFF)}
+.spk span{font-weight:700;font-size:15px} .spk small{font-size:12.5px;opacity:.92;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+.spk[data-state="listening"]{background:linear-gradient(135deg,#FF4D6D,#C2337A)}
+.spk[data-state="listening"]::after{content:"";position:absolute;left:0;bottom:0;height:5px;width:calc(var(--level,0)*100%);background:rgba(255,255,255,.8);transition:width .08s}
+.spk[data-state="busy"]{opacity:.85}
+.hint{margin:0;font-size:12.5px;color:var(--muted);text-align:center}
+
+/* ---------- sheets ---------- */
+.sheet{position:fixed;inset:0;z-index:50;display:flex;align-items:flex-end;justify-content:center;background:rgba(8,10,24,.45);animation:fade .18s}
+.sheet-panel{width:100%;max-width:640px;max-height:88vh;max-height:88dvh;background:var(--surface);border-radius:24px 24px 0 0;box-shadow:var(--shadow-lg);
+  display:flex;flex-direction:column;animation:up .22s ease-out;padding-bottom:env(safe-area-inset-bottom)}
+.sheet-head{display:flex;align-items:center;gap:8px;padding:14px 12px 8px 18px}
+.sheet-head h3{margin:0;font-size:18px;flex:1}
+.sheet-body{overflow:auto;padding:4px 18px 18px;-webkit-overflow-scrolling:touch}
+.grab{width:42px;height:5px;border-radius:9px;background:var(--surface-3);margin:8px auto 0}
+@keyframes up{from{transform:translateY(30px);opacity:.4}to{transform:none;opacity:1}}
+@keyframes fade{from{opacity:0}}
+.search{width:100%;height:46px;border-radius:14px;border:1px solid var(--border);background:var(--surface-2);padding:0 14px;margin-bottom:8px;font-size:16px}
+.lang-list{list-style:none;margin:0;padding:0}
+.lang-list button{width:100%;min-height:52px;display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:12px;text-align:left}
+.lang-list button:hover{background:var(--surface-2)}
+.lang-list button[aria-selected="true"]{background:var(--blue-soft)}
+.lang-list .code{font-size:11px;font-weight:700;color:var(--blue);background:var(--blue-soft);border-radius:7px;padding:3px 6px;min-width:34px;text-align:center;text-transform:uppercase}
+.lang-list .nm{flex:1;min-width:0} .lang-list .nm b{display:block;font-weight:600} .lang-list .nm small{color:var(--muted)}
+.lang-list .tick{color:var(--blue);font-weight:700}
+.empty-note{color:var(--muted);text-align:center;padding:24px 8px}
+.hist-item{border:1px solid var(--border);border-radius:16px;padding:10px 12px;margin-bottom:10px;background:var(--surface)}
+.hist-meta{display:flex;justify-content:space-between;gap:8px;font-size:12px;color:var(--muted)}
+.hist-src{margin:6px 0 2px;color:var(--muted);font-size:14px;white-space:pre-wrap;overflow-wrap:anywhere}
+.hist-tr{margin:0;font-size:16px;font-weight:560;white-space:pre-wrap;overflow-wrap:anywhere}
+.hist-actions{display:flex;gap:4px;justify-content:flex-end;margin-top:6px;flex-wrap:wrap}
+.hist-actions button{height:36px;padding:0 10px;border-radius:10px;font-size:13px;color:var(--muted);display:inline-flex;align-items:center;gap:6px;background:var(--surface-2)}
+.hist-actions button:hover{color:var(--text)}
+.hist-actions .del{color:var(--danger)}
+.danger-btn{height:40px;padding:0 14px;border-radius:12px;color:var(--danger);background:var(--danger-soft);font-weight:600;font-size:14px}
+.set-group{padding:12px 0;border-bottom:1px solid var(--border)}
+.set-group:last-child{border-bottom:0}
+.set-group h4{margin:0 0 8px;font-size:13px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
+.toggle{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:48px;font-size:15px}
+.toggle input{appearance:none;-webkit-appearance:none;width:50px;height:30px;border-radius:999px;background:var(--surface-3);position:relative;transition:background .2s;flex:0 0 auto;cursor:pointer}
+.toggle input::after{content:"";position:absolute;top:3px;left:3px;width:24px;height:24px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.25);transition:transform .2s}
+.toggle input:checked{background:var(--violet)} .toggle input:checked::after{transform:translateX(20px)}
+.help{font-size:13px;color:var(--muted);margin:4px 0 0}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:4px 12px;font-size:13.5px}
+.kv dt{color:var(--muted)} .kv dd{margin:0;overflow-wrap:anywhere}
+.privacy p{font-size:14px;margin:0 0 8px;color:var(--text)}
+
+/* toast */
+.toast{position:fixed;left:50%;bottom:calc(var(--dock-h) + 20px + env(safe-area-inset-bottom));transform:translateX(-50%) translateY(10px);z-index:60;
+  background:#1B1F38;color:#fff;padding:11px 16px;border-radius:14px;font-size:14.5px;box-shadow:var(--shadow-lg);max-width:min(92vw,520px);
+  opacity:0;pointer-events:none;transition:opacity .2s,transform .2s;text-align:center}
+.toast.show{opacity:1;transform:translateX(-50%)}
+.toast.err{background:#B42332}
+
+@media (min-width:860px){
+  .grid2{grid-template-columns:1fr 1fr}
+  .sheet{align-items:center}
+  .sheet-panel{border-radius:24px;max-height:80vh}
+}
+@media (max-width:520px){ .tagline{display:none} }
+@media (max-width:360px){
+  .icon-btn{width:40px;height:40px} .brand h1{font-size:16px} .logo{width:36px;height:36px}
+  .mic{width:84px;height:84px}
+}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand">
+    <div class="logo" aria-hidden="true">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round"><path d="M5 10v4M9 6v12M13 8.5v7M17 5v14M21 10v4"/></svg>
+    </div>
+    <div class="brand-text"><h1>LinguaVoice <span>AI</span></h1>
+      <div class="subline"><small class="tagline">Дауыстық аудармашы ·</small>
+        <span class="conn" id="conn" data-state="connecting" role="status" aria-live="polite"><i></i><span id="connText">Қосылуда…</span></span></div>
+    </div>
+  </div>
+  <div class="top-actions">
+    <button class="icon-btn" id="btnHistory" aria-label="Аударма тарихы" title="Тарих">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l3 2"/></svg>
+    </button>
+    <button class="icon-btn" id="btnSettings" aria-label="Баптаулар" title="Баптаулар">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2.2"/><circle cx="10" cy="17" r="2.2"/></svg>
+    </button>
+    <button class="icon-btn" id="btnTheme" aria-label="Жарық / қараңғы тақырып" title="Тақырып">
+      <svg id="icoMoon" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>
+      <svg id="icoSun" hidden width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4.2"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
+    </button>
+  </div>
+</header>
+
+<div class="banner" id="banner" hidden><div class="inner" role="alert"><div id="bannerText"></div></div></div>
+
+<main>
+  <nav class="tabs" role="tablist" aria-label="Режим">
+    <button role="tab" id="tabTranslate" aria-selected="true" aria-controls="viewTranslate">Аударма</button>
+    <button role="tab" id="tabConv" aria-selected="false" aria-controls="viewConv">Сұхбат</button>
+  </nav>
+
+  <!-- ===== Translate mode ===== -->
+  <section id="viewTranslate" role="tabpanel" aria-labelledby="tabTranslate">
+    <div class="card langbar">
+      <button class="lang-btn" id="srcBtn" aria-haspopup="dialog"><small>Бастапқы тіл</small><span id="srcName">—</span></button>
+      <button class="swap" id="swapBtn" aria-label="Тілдерді алмастыру" title="Тілдерді алмастыру">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 4 3 8l4 4"/><path d="M3 8h14"/><path d="m17 20 4-4-4-4"/><path d="M21 16H7"/></svg>
+      </button>
+      <button class="lang-btn" id="tgtBtn" aria-haspopup="dialog"><small>Аударма тілі</small><span id="tgtName">—</span></button>
+    </div>
+
+    <div class="grid2">
+      <article class="card text-card" aria-labelledby="hSrc">
+        <header>
+          <h2 id="hSrc">Танылған мәтін</h2>
+          <span class="chip" id="detChip" hidden></span>
+          <span class="spacer"></span>
+          <button class="copy-btn" id="copySrc" aria-label="Танылған мәтінді көшіру" title="Көшіру">
+            <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><rect x="8" y="8" width="12" height="12" rx="3"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></svg>
+          </button>
+        </header>
+        <p class="text" id="srcText" aria-live="polite" data-placeholder="Микрофонды басып, сөйлеңіз — танылған сөзіңіз осы жерде шығады."></p>
+      </article>
+
+      <article class="card text-card accent" aria-labelledby="hTgt">
+        <header>
+          <h2 id="hTgt">Аударма</h2>
+          <span class="chip" id="tgtChip" hidden></span>
+          <span class="spacer"></span>
+          <button class="copy-btn" id="copyTgt" aria-label="Аударманы көшіру" title="Көшіру">
+            <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><rect x="8" y="8" width="12" height="12" rx="3"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></svg>
+          </button>
+        </header>
+        <p class="text big" id="tgtText" aria-live="polite" data-placeholder="Аударма осы жерде пайда болады."></p>
+        <div class="player">
+          <button class="pill primary" id="playBtn" disabled>
+            <svg id="icoPlay" width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M7 4.5v15l13-7.5z"/></svg>
+            <svg id="icoPause" hidden width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>
+            <span id="playLabel">Ойнату</span>
+          </button>
+          <button class="pill" id="replayBtn" disabled>
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg>
+            Қайта тыңдау
+          </button>
+        </div>
+        <div class="voice-row">
+          <label class="field"><span class="field-head">Дауыс (Edge TTS)</span><select id="voiceSel" aria-label="Дауыс"></select></label>
+          <label class="field"><span class="field-head"><span>Сөйлеу жылдамдығы</span><output id="rateOut">0%</output></span>
+            <input type="range" id="rateRange" min="-50" max="50" step="5" value="0" aria-label="Сөйлеу жылдамдығы"></label>
+        </div>
+      </article>
+    </div>
+
+    <section class="card metrics" id="metrics" hidden aria-label="Жылдамдық көрсеткіштері">
+      <h3>Жылдамдық көрсеткіштері</h3>
+      <dl>
+        <dt>Сөйлеу ұзақтығы</dt><dd id="mCapture">—</dd>
+        <dt>Сөз соңын анықтау кідірісі</dt><dd id="mEndpoint">—</dd>
+        <dt>Gemini: алғашқы жауап / толық</dt><dd id="mGemini">—</dd>
+        <dt>Edge TTS: алғашқы сегмент</dt><dd id="mTts">—</dd>
+        <dt>Сөз аяқталғаннан ойнатуға дейін</dt><dd id="mTotal" class="total">—</dd>
+      </dl>
+    </section>
+  </section>
+
+  <!-- ===== Conversation mode ===== -->
+  <section id="viewConv" role="tabpanel" aria-labelledby="tabConv" hidden>
+    <div class="card conv-langs">
+      <div class="speaker a"><span class="badge a">1</span><button class="lang-btn" id="convABtn" aria-haspopup="dialog"><small>1-сөйлеуші</small><span id="convAName">—</span></button></div>
+      <button class="swap" id="convSwap" aria-label="Сөйлеушілердің тілдерін алмастыру">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 4 3 8l4 4"/><path d="M3 8h14"/><path d="m17 20 4-4-4-4"/><path d="M21 16H7"/></svg>
+      </button>
+      <div class="speaker b"><span class="badge b">2</span><button class="lang-btn" id="convBBtn" aria-haspopup="dialog"><small>2-сөйлеуші</small><span id="convBName">—</span></button></div>
+    </div>
+    <div class="chat" id="chat" aria-live="polite">
+      <div class="empty" id="chatEmpty">Өз түймеңізді басып, сөйлеңіз. Сөзіңіз екінші адамның тіліне аударылып, дауыстап оқылады.</div>
+    </div>
+  </section>
+</main>
+
+<footer class="dock" id="dock">
+  <div class="dock-inner">
+    <div class="status" id="status" data-kind="idle" role="status" aria-live="polite"><span class="dot"></span><span id="statusText">Жүктелуде…</span></div>
+
+    <div class="mic-row" id="dockTranslate">
+      <button class="mini ghost" id="cancelBtn" aria-label="Жазудан бас тарту" title="Бас тарту">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg>
+      </button>
+      <button class="mic" id="micBtn" data-state="idle" data-speech="0" aria-label="Сөйлеуді бастау">
+        <svg class="ico-mic" width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="9" y="3" width="6" height="11" rx="3" fill="currentColor"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21M8.5 21h7"/></svg>
+        <svg class="ico-stop" width="30" height="30" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="3"/></svg>
+      </button>
+      <button class="mini ghost" id="stopPlayBtn" aria-label="Ойнатуды тоқтату" title="Ойнатуды тоқтату">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M11 5 6 9H3v6h3l5 4z"/><path d="m16 9 5 6M21 9l-5 6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+      </button>
+    </div>
+
+    <div class="dock-conv" id="dockConv" hidden>
+      <button class="spk a" id="spkA" data-state="idle" aria-label="1-сөйлеуші сөйлейді"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="9" y="3" width="6" height="11" rx="3" fill="currentColor"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21"/></svg><span>1-сөйлеуші</span><small id="spkALang"></small></button>
+      <button class="mini" id="convStop" aria-label="Ойнатуды тоқтату" title="Тоқтату"><svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2.5"/></svg></button>
+      <button class="spk b" id="spkB" data-state="idle" aria-label="2-сөйлеуші сөйлейді"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="9" y="3" width="6" height="11" rx="3" fill="currentColor"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21"/></svg><span>2-сөйлеуші</span><small id="spkBLang"></small></button>
+    </div>
+    <p class="hint" id="hint">Сөйлеп болған соң сәл кідіріңіз — аударма өздігінен басталады.</p>
+  </div>
+</footer>
+
+<!-- language picker -->
+<div class="sheet" id="langSheet" hidden role="dialog" aria-modal="true" aria-labelledby="langSheetTitle">
+  <div class="sheet-panel">
+    <div class="grab"></div>
+    <div class="sheet-head"><h3 id="langSheetTitle">Тілді таңдаңыз</h3>
+      <button class="icon-btn" data-close aria-label="Жабу"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>
+    <div class="sheet-body">
+      <input class="search" id="langSearch" type="search" placeholder="Тілді іздеу…" aria-label="Тілді іздеу" autocomplete="off">
+      <ul class="lang-list" id="langList" role="listbox"></ul>
+    </div>
+  </div>
+</div>
+
+<!-- history -->
+<div class="sheet" id="historySheet" hidden role="dialog" aria-modal="true" aria-labelledby="histTitle">
+  <div class="sheet-panel">
+    <div class="grab"></div>
+    <div class="sheet-head"><h3 id="histTitle">Аударма тарихы</h3>
+      <button class="danger-btn" id="histClear">Барлығын тазалау</button>
+      <button class="icon-btn" data-close aria-label="Жабу"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>
+    <div class="sheet-body" id="histBody"></div>
+  </div>
+</div>
+
+<!-- settings -->
+<div class="sheet" id="settingsSheet" hidden role="dialog" aria-modal="true" aria-labelledby="setTitle">
+  <div class="sheet-panel">
+    <div class="grab"></div>
+    <div class="sheet-head"><h3 id="setTitle">Баптаулар</h3>
+      <button class="icon-btn" data-close aria-label="Жабу"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>
+    <div class="sheet-body">
+      <div class="set-group">
+        <h4>Сөздің аяқталуын анықтау</h4>
+        <label class="field"><span class="field-head"><span>Үнсіздік шегі</span><output id="silenceOut">500 мс</output></span>
+          <input type="range" id="silenceRange" min="250" max="1200" step="50" value="500" aria-label="Үнсіздік шегі, миллисекунд"></label>
+        <p class="help">Аз мән — аударма тезірек басталады, бірақ ұзақ кідірісте сөз бөлініп кетуі мүмкін. Ұсынылатыны: 400–600 мс.</p>
+      </div>
+      <div class="set-group">
+        <h4>Ойнату және тарих</h4>
+        <label class="toggle">Аударманы бірден дауыстап оқу<input type="checkbox" id="optAutoplay" checked></label>
+        <label class="toggle">Аударма тарихын осы құрылғыда сақтау<input type="checkbox" id="optHistory" checked></label>
+        <label class="toggle">Жылдамдық көрсеткіштерін көрсету<input type="checkbox" id="optMetrics"></label>
+      </div>
+      <div class="set-group">
+        <h4>Сервер</h4>
+        <dl class="kv">
+          <dt>Мекенжай</dt><dd id="infoUrl">—</dd>
+          <dt>Күйі</dt><dd id="infoState">—</dd>
+          <dt>Gemini моделі</dt><dd id="infoModel">—</dd>
+          <dt>Дауыс қозғалтқышы</dt><dd>Microsoft Edge TTS</dd>
+        </dl>
+      </div>
+      <div class="set-group privacy">
+        <h4>Құпиялылық</h4>
+        <p>Дыбыс тек микрофон түймесін басқанда ғана жазылады. Сөйлем аяқталған соң жазба сіздің серверіңізге, ал одан Google Gemini API қызметіне сөзді тану, тілді анықтау және аудару үшін жіберіледі.</p>
+        <p>Аударма мәтіні дауысқа айналдыру үшін Microsoft Edge TTS қызметіне жіберіледі. Тарихтан қайта тыңдағанда да мәтін Edge TTS-ке қайта жіберіледі.</p>
+        <p>Дыбыс жазбалары құрылғыда да, серверде де сақталмайды. Тарихта тек мәтін сақталады — ол тек осы браузерде (IndexedDB) тұрады және кез келген уақытта өшіріледі.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script>
+"use strict";
+/* ============================== Texts (Kazakh) ============================== */
+const T = {
+  status: {
+    idle: "Жүктелуде…", ready: "Дайын", listening: "Тыңдап тұрмын… сөйлеңіз", hearing: "Тыңдап тұрмын…",
+    processing: "Сөз өңделуде…", translating: "Аударылуда…", tts: "Дауыс жасалуда…",
+    playing: "Аударма ойнатылуда…", error: "Қате", offline: "Серверге қосылмаған"
+  },
+  conn: { connecting: "Қосылуда…", online: "Қосылды", offline: "Байланыс жоқ", unconfigured: "Бапталмаған" },
+  err: {
+    config_missing: "Сервер мекенжайы бапталмаған. index.html файлының басындағы CONFIG.API_BASE_URL мәнін өз серверіңіздің HTTPS мекенжайына ауыстырыңыз.",
+    config_invalid: "CONFIG.API_BASE_URL мәні жарамсыз. Мысалы: https://linguavoice-backend.onrender.com",
+    mixed_content: "Сайт HTTPS арқылы ашылған, ал CONFIG.API_BASE_URL — HTTP. Сервердің HTTPS мекенжайын көрсетіңіз.",
+    backend_unreachable: "Серверге қосылу мүмкін болмады. Сервердің іске қосылғанын және интернет байланысын тексеріңіз.",
+    ws_lost: "Сервермен байланыс үзілді. Қайта қосылуда…",
+    mic_denied: "Микрофонға рұқсат берілмеді. Браузер баптауларында осы сайтқа микрофонды пайдалануға рұқсат беріңіз.",
+    mic_notfound: "Микрофон табылмады. Құрылғыда микрофонның бар екенін тексеріңіз.",
+    mic_busy: "Микрофонды басқа қолданба пайдаланып тұр немесе ол қолжетімсіз.",
+    mic_failed: "Микрофонды іске қосу мүмкін болмады.",
+    insecure: "Микрофон тек HTTPS (немесе localhost) арқылы ашылған бетте жұмыс істейді.",
+    unsupported: "Бұл браузер қажетті мүмкіндіктерді (микрофон, Web Audio немесе WebSocket) қолдамайды. Chrome, Safari, Edge немесе Firefox-тың соңғы нұсқасын пайдаланыңыз.",
+    no_speech: "Сөз анықталмады. Микрофонға жақынырақ, анығырақ сөйлеп, қайталап көріңіз.",
+    rate_limited: "Сұраулар тым көп. Бірнеше секундтан соң қайталаңыз.",
+    timeout: "Сервер уақытында жауап бермеді. Қайталап көріңіз.",
+    gemini_timeout: "Gemini уақытында жауап бермеді. Қайталап көріңіз.",
+    gemini_auth: "Gemini API кілті қабылданбады. Сервердегі GEMINI_API_KEY мәнін тексеріңіз.",
+    server_misconfigured: "Серверде GEMINI_API_KEY орнатылмаған. Аударма жұмыс істемейді.",
+    gemini_model: "Таңдалған Gemini моделі қолжетімсіз. Сервердегі GEMINI_MODEL мәнін тексеріңіз.",
+    blocked: "Gemini бұл сұрауды өңдеуден бас тартты.",
+    translate_failed: "Аудару сәтсіз аяқталды. Қайталап көріңіз.",
+    tts_unavailable: "Edge TTS қызметі қолжетімсіз. Мәтін аударылды, бірақ дауыс жасалмады.",
+    tts_timeout: "Edge TTS уақытында жауап бермеді. Мәтін аударылды, бірақ дауыс жасалмады.",
+    tts_voice_unsupported: "Таңдалған дауысты Edge TTS қолдамайды. Басқа дауысты таңдаңыз.",
+    tts_no_voice: "Бұл тілге Edge TTS дауысы жоқ.",
+    tts_no_audio: "Edge TTS дыбыс қайтармады.",
+    voices_unavailable: "Edge TTS дауыстар тізімін жүктеу мүмкін болмады. Автоматты дауыс қолданылады.",
+    audio_too_large: "Жазба тым ұзақ. Қысқарақ сөйлеңіз.",
+    text_too_long: "Мәтін тым ұзақ.",
+    playback_blocked: "Браузер дыбысты автоматты ойнатуға рұқсат бермеді. «Ойнату» түймесін басыңыз.",
+    playback_failed: "Аудионы ойнату мүмкін болмады.",
+    bad_request: "Сұрау қате құрылған.",
+    clipboard: "Көшіру мүмкін болмады.",
+    swap_need_lang: "Алмастыру үшін алдымен бастапқы тілді таңдаңыз немесе бір рет сөйлеңіз.",
+    no_voice_for_target: "Бұл тілге Edge TTS дауысы жоқ — басқа тілді таңдаңыз."
+  },
+  copied: "Көшірілді", deleted: "Жойылды", cleared: "Тарих тазаланды", confirmClear: "Барлық аудармаларды жою керек пе?",
+  auto: "Автоматты анықтау", autoShort: "Автоматты", autoVoice: "Автоматты", female: "әйел", male: "ер",
+  histEmpty: "Әзірге аудармалар жоқ.", histOff: "Тарихты сақтау өшірулі (Баптаулар).",
+  copySrc: "Түпнұсқа", copyTr: "Аударма", play: "Тыңдау", del: "Жою",
+  pickSrc: "Бастапқы тіл", pickTgt: "Аударма тілі", pickA: "1-сөйлеушінің тілі", pickB: "2-сөйлеушінің тілі",
+  noLang: "Ештеңе табылмады", stop: "Тоқтату", playLbl: "Ойнату", speaker: n => `${n}-сөйлеуші`,
+  ms: v => `${Math.round(v)} мс`, autoDetected: c => `Анықталды: ${c}`
+};
+
+/* code, Kazakh name, native name (for search) — codes must match backend/app/languages.py */
+const LANGS = [
+  ["kk","Қазақ тілі","Қазақша"],["ru","Орыс тілі","Русский"],["en","Ағылшын тілі","English"],
+  ["tr","Түрік тілі","Türkçe"],["uz","Өзбек тілі","Oʻzbekcha"],["ky","Қырғыз тілі","Кыргызча"],
+  ["tg","Тәжік тілі","Тоҷикӣ"],["tk","Түрікмен тілі","Türkmençe"],["mn","Моңғол тілі","Монгол"],
+  ["az","Әзірбайжан тілі","Azərbaycanca"],["zh","Қытай тілі","中文"],["ja","Жапон тілі","日本語"],
+  ["ko","Корей тілі","한국어"],["de","Неміс тілі","Deutsch"],["fr","Француз тілі","Français"],
+  ["es","Испан тілі","Español"],["it","Итальян тілі","Italiano"],["pt","Португал тілі","Português"],
+  ["ar","Араб тілі","العربية"],["fa","Парсы тілі","فارسی"],["hi","Хинди тілі","हिन्दी"],
+  ["ur","Урду тілі","اردو"],["bn","Бенгал тілі","বাংলা"],["uk","Украин тілі","Українська"],
+  ["be","Беларусь тілі","Беларуская"],["pl","Поляк тілі","Polski"],["cs","Чех тілі","Čeština"],
+  ["nl","Нидерланд тілі","Nederlands"],["sv","Швед тілі","Svenska"],["fi","Фин тілі","Suomi"],
+  ["da","Дат тілі","Dansk"],["no","Норвег тілі","Norsk"],["el","Грек тілі","Ελληνικά"],
+  ["he","Иврит","עברית"],["hu","Венгр тілі","Magyar"],["ro","Румын тілі","Română"],
+  ["bg","Болгар тілі","Български"],["sr","Серб тілі","Српски"],["hr","Хорват тілі","Hrvatski"],
+  ["ka","Грузин тілі","ქართული"],["hy","Армян тілі","Հայերեն"],["id","Индонезия тілі","Bahasa Indonesia"],
+  ["ms","Малай тілі","Bahasa Melayu"],["vi","Вьетнам тілі","Tiếng Việt"],["th","Тай тілі","ไทย"]
+].map(([code, kk, native]) => ({ code, kk, native }));
+const LANG = Object.fromEntries(LANGS.map(l => [l.code, l]));
+const langName = c => c === "auto" ? T.auto : (LANG[c] ? LANG[c].kk : (c || "").toUpperCase());
+
+/* ============================== Utilities ============================== */
+const $ = id => document.getElementById(id);
+const now = () => performance.now();
+const uid = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4);
+const esc = s => String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+class AppError extends Error { constructor(code, detail) { super(code); this.code = code; this.detail = detail; } }
+const errText = code => T.err[code] || T.err.translate_failed;
+
+const store = {
+  get(k, d) { try { const v = localStorage.getItem("lv." + k); return v === null ? d : JSON.parse(v); } catch { return d; } },
+  set(k, v) { try { localStorage.setItem("lv." + k, JSON.stringify(v)); } catch { /* private mode */ } }
+};
+
+let toastTimer = 0;
+function toast(msg, isErr = false, ms = 3200) {
+  const el = $("toast");
+  el.textContent = msg; el.classList.toggle("err", isErr); el.classList.add("show");
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => el.classList.remove("show"), ms);
+}
+function banner(html) {
+  if (!html) { $("banner").hidden = true; return; }
+  $("bannerText").innerHTML = html; $("banner").hidden = false;
+}
+let statusKind = "idle";
+function setStatus(kind, text) {
+  const map = { idle: "idle", ready: "ready", listening: "listening", hearing: "listening", processing: "busy",
+    translating: "busy", tts: "busy", playing: "playing", error: "error", offline: "error" };
+  statusKind = kind;
+  $("status").dataset.kind = map[kind] || "ready";
+  $("statusText").textContent = text || T.status[kind] || "";
+}
+async function copyText(text) {
+  if (!text) return;
+  try { await navigator.clipboard.writeText(text); toast(T.copied); }
+  catch {
+    try {
+      const ta = document.createElement("textarea"); ta.value = text; ta.setAttribute("readonly", "");
+      ta.style.cssText = "position:fixed;opacity:0;top:0"; document.body.appendChild(ta); ta.select();
+      const ok = document.execCommand("copy"); ta.remove(); toast(ok ? T.copied : T.err.clipboard, !ok);
+    } catch { toast(T.err.clipboard, true); }
+  }
+}
+
+/* ============================== Preferences ============================== */
+const prefs = {
+  theme: store.get("theme", null),
+  mode: store.get("mode", "translate"),
+  src: store.get("src", "auto"),
+  tgt: store.get("tgt", "en"),
+  convA: store.get("convA", "kk"),
+  convB: store.get("convB", "en"),
+  voices: store.get("voices", {}),       // per-language voice choice
+  rate: store.get("rate", 0),
+  silenceMs: store.get("silenceMs", CONFIG.DEFAULT_SILENCE_MS),
+  autoplay: store.get("autoplay", true),
+  saveHistory: store.get("saveHistory", true),
+  metrics: store.get("metrics", false)
+};
+const savePref = (k, v) => { prefs[k] = v; store.set(k, v); };
+
+/* ============================== Backend config ============================== */
+function backendConfig() {
+  const raw = String(CONFIG.API_BASE_URL || "").trim().replace(/\/+$/, "");
+  if (!raw || /YOUR-BACKEND|example$|example\//i.test(raw)) return { ok: false, code: "config_missing" };
+  let u; try { u = new URL(raw); } catch { return { ok: false, code: "config_invalid" }; }
+  if (!/^https?:$/.test(u.protocol)) return { ok: false, code: "config_invalid" };
+  if (location.protocol === "https:" && u.protocol === "http:") return { ok: false, code: "mixed_content" };
+  const base = (u.origin + u.pathname).replace(/\/+$/, "");
+  return { ok: true, base, ws: base.replace(/^http/, "ws") + "/ws" };
+}
+const BACKEND = backendConfig();
+const api = path => BACKEND.base + path;
+
+async function fetchTimeout(url, opts = {}, ms = CONFIG.REQUEST_TIMEOUT_MS) {
+  const ctl = new AbortController();
+  const outer = opts.signal;
+  const onAbort = () => ctl.abort();
+  if (outer) { if (outer.aborted) ctl.abort(); else outer.addEventListener("abort", onAbort, { once: true }); }
+  const timer = setTimeout(() => ctl.abort("timeout"), ms);
+  try { return await fetch(url, { ...opts, signal: ctl.signal, cache: "no-store" }); }
+  catch (e) {
+    if (outer && outer.aborted) throw new AppError("cancelled");
+    if (ctl.signal.aborted) throw new AppError("timeout");
+    throw new AppError("backend_unreachable");
+  } finally { clearTimeout(timer); if (outer) outer.removeEventListener("abort", onAbort); }
+}
+
+/* ============================== WebSocket client ============================== */
+const Net = {
+  ws: null, state: "off", backoff: 800, retryTimer: 0, pingTimer: 0, model: null, geminiOk: true,
+  onJSON: null, onBinary: null,
+  setConn(state) {
+    this.state = state;
+    $("conn").dataset.state = state; $("connText").textContent = T.conn[state] || state;
+    $("infoState").textContent = T.conn[state] || state;
+  },
+  connect() {
+    if (!BACKEND.ok) return;
+    if (this.ws && (this.ws.readyState === 0 || this.ws.readyState === 1)) return;
+    clearTimeout(this.retryTimer);
+    this.setConn("connecting");
+    let ws;
+    try { ws = new WebSocket(BACKEND.ws); } catch { this.scheduleRetry(); return; }
+    ws.binaryType = "arraybuffer";
+    this.ws = ws;
+    ws.onopen = () => {
+      this.backoff = 800; this.setConn("online");
+      clearInterval(this.pingTimer);
+      this.pingTimer = setInterval(() => this.send({ type: "ping", t: Date.now() }), 25000);
+      if (statusKind === "offline" || statusKind === "idle") setStatus("ready");
+    };
+    ws.onmessage = ev => {
+      if (typeof ev.data === "string") {
+        let m; try { m = JSON.parse(ev.data); } catch { return; }
+        if (m.type === "ready") { this.model = m.model; this.geminiOk = !!m.gemini_configured; $("infoModel").textContent = m.model || "—";
+          if (!m.gemini_configured) banner(`<b>${esc(T.status.error)}:</b> ${esc(T.err.server_misconfigured)}`); }
+        this.onJSON && this.onJSON(m);
+      } else this.onBinary && this.onBinary(ev.data);
+    };
+    ws.onclose = () => {
+      clearInterval(this.pingTimer);
+      if (this.ws !== ws) return;
+      this.ws = null; this.setConn("offline");
+      App.onConnectionLost();
+      if (document.visibilityState === "visible") this.scheduleRetry();
+    };
+    ws.onerror = () => { /* onclose follows */ };
+  },
+  scheduleRetry() {
+    clearTimeout(this.retryTimer);
+    this.retryTimer = setTimeout(() => this.connect(), this.backoff);
+    this.backoff = Math.min(this.backoff * 2, 15000);
+  },
+  get open() { return !!this.ws && this.ws.readyState === 1; },
+  async waitOpen(ms) {
+    if (this.open) return true;
+    this.connect();
+    const t0 = now();
+    while (now() - t0 < ms) { await new Promise(r => setTimeout(r, 60)); if (this.open) return true; }
+    return false;
+  },
+  send(obj) { if (this.open) { this.ws.send(JSON.stringify(obj)); return true; } return false; },
+  sendFrame(header, payload) {
+    if (!this.open) return false;
+    const h = new TextEncoder().encode(JSON.stringify(header));
+    const buf = new Uint8Array(4 + h.length + payload.byteLength);
+    new DataView(buf.buffer).setUint32(0, h.length, false);
+    buf.set(h, 4); buf.set(new Uint8Array(payload), 4 + h.length);
+    this.ws.send(buf.buffer); return true;
+  }
+};
+function unpackFrame(ab) {
+  const dv = new DataView(ab); const hl = dv.getUint32(0, false);
+  const header = JSON.parse(new TextDecoder().decode(new Uint8Array(ab, 4, hl)));
+  return { header, payload: ab.slice(4 + hl) };
+}
+
+/* ============================== Audio capture + endpointing ============================== */
+const Recorder = (() => {
+  let ctx = null, workletPromise = null, cur = null;
+  const WORKLET = "class C extends AudioWorkletProcessor{constructor(){super();this.b=new Float32Array(1024);this.n=0}" +
+    "process(i){const c=i[0]&&i[0][0];if(c){for(let k=0;k<c.length;k++){this.b[this.n++]=c[k];if(this.n===1024){this.port.postMessage(this.b,[this.b.buffer]);this.b=new Float32Array(1024);this.n=0}}}return true}}" +
+    "registerProcessor('lv-capture',C);";
+
+  function audioCtx() {
+    if (!ctx) { const AC = window.AudioContext || window.webkitAudioContext; ctx = new AC({ latencyHint: "interactive" }); }
+    return ctx;
+  }
+  async function unlock() { const c = audioCtx(); if (c.state !== "running") { try { await c.resume(); } catch { /* ignore */ } } }
+
+  async function start(opts) {
+    if (cur) cancel();
+    const c = audioCtx();
+    await unlock();
+    let stream;
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({
+        audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true, autoGainControl: true }
+      });
+    } catch (e) {
+      const n = e && e.name;
+      if (n === "NotAllowedError" || n === "SecurityError" || n === "PermissionDeniedError") throw new AppError("mic_denied");
+      if (n === "NotFoundError" || n === "DevicesNotFoundError" || n === "OverconstrainedError") throw new AppError("mic_notfound");
+      if (n === "NotReadableError" || n === "TrackStartError" || n === "AbortError") throw new AppError("mic_busy");
+      throw new AppError("mic_failed");
+    }
+    if (c.state !== "running") { try { await c.resume(); } catch { /* ignore */ } }
+    const src = c.createMediaStreamSource(stream);
+    const sink = c.createGain(); sink.gain.value = 0; sink.connect(c.destination);
+    const rec = {
+      opts, stream, src, sink, node: null, sr: c.sampleRate, frames: [], total: 0, offset: 0,
+      speechStart: -1, lastVoice: -1, lastVoiceWall: 0, above: 0, noise: 0.004, startedAt: now(), done: false
+    };
+    cur = rec;
+    let node = null;
+    if (c.audioWorklet && window.AudioWorkletNode) {
+      try {
+        if (!workletPromise) {
+          const url = URL.createObjectURL(new Blob([WORKLET], { type: "application/javascript" }));
+          workletPromise = c.audioWorklet.addModule(url);
+        }
+        await workletPromise;
+        node = new AudioWorkletNode(c, "lv-capture");
+        node.port.onmessage = e => onFrame(rec, e.data);
+      } catch { node = null; workletPromise = null; }
+    }
+    if (!node) {
+      node = c.createScriptProcessor(2048, 1, 1);
+      node.onaudioprocess = e => onFrame(rec, new Float32Array(e.inputBuffer.getChannelData(0)));
+    }
+    rec.node = node;
+    src.connect(node); node.connect(sink);
+    if (rec.done) teardown(rec); // cancelled while starting
+  }
+
+  function onFrame(rec, f) {
+    if (rec.done) return;
+    rec.frames.push(f); rec.total += f.length;
+    let sum = 0; for (let i = 0; i < f.length; i++) sum += f[i] * f[i];
+    const rms = Math.sqrt(sum / f.length);
+    const thr = Math.max(0.012, rec.noise * 3.2);
+    const t = now();
+    rec.opts.onLevel && rec.opts.onLevel(Math.min(1, rms / 0.1));
+    if (rec.speechStart < 0) {
+      if (rms > thr) {
+        if (++rec.above >= 2) {
+          rec.speechStart = Math.max(rec.offset, rec.total - f.length * 2);
+          rec.lastVoice = rec.total; rec.lastVoiceWall = t;
+          rec.opts.onSpeech && rec.opts.onSpeech(true);
+        }
+      } else {
+        rec.above = 0; rec.noise = rec.noise * 0.92 + rms * 0.08;
+        const keep = rec.sr * 0.35; // keep ~350 ms of pre-roll
+        while (rec.frames.length > 1 && (rec.total - rec.offset - rec.frames[0].length) >= keep) {
+          rec.offset += rec.frames[0].length; rec.frames.shift();
+        }
+      }
+      if (rec.speechStart < 0 && t - rec.startedAt > CONFIG.NO_SPEECH_TIMEOUT_MS) finish(rec, "no_speech");
+      return;
+    }
+    if (rms > thr * 0.65) { rec.lastVoice = rec.total; rec.lastVoiceWall = t; }
+    const silenceMs = (rec.total - rec.lastVoice) / rec.sr * 1000;
+    const speechMs = (rec.lastVoice - rec.speechStart) / rec.sr * 1000;
+    if (silenceMs >= rec.opts.silenceMs) {
+      if (speechMs < 180) { // a click or a cough — keep listening
+        rec.speechStart = -1; rec.above = 0; rec.opts.onSpeech && rec.opts.onSpeech(false);
+      } else finish(rec, "endpoint");
+    } else if ((rec.total - rec.speechStart) / rec.sr * 1000 > CONFIG.MAX_RECORDING_MS) finish(rec, "max");
+  }
+
+  function teardown(rec) {
+    try { rec.node && (rec.node.port ? (rec.node.port.onmessage = null) : (rec.node.onaudioprocess = null)); } catch { /* */ }
+    try { rec.src.disconnect(); } catch { /* */ }
+    try { rec.node && rec.node.disconnect(); } catch { /* */ }
+    try { rec.sink.disconnect(); } catch { /* */ }
+    try { rec.stream.getTracks().forEach(tr => tr.stop()); } catch { /* */ }
+  }
+
+  function finish(rec, reason) {
+    if (rec.done) return;
+    rec.done = true;
+    if (cur === rec) cur = null;
+    const tEnd = now();
+    teardown(rec);
+    if (reason === "cancel") { rec.opts.onEnd({ reason }); return; }
+    if (rec.speechStart < 0) { rec.opts.onEnd({ reason: "no_speech" }); return; }
+    const startS = Math.max(rec.offset, rec.speechStart - Math.floor(rec.sr * 0.25));
+    const endS = Math.min(rec.total, rec.lastVoice + Math.floor(rec.sr * 0.2));
+    const pcm = new Float32Array(Math.max(0, endS - startS));
+    let pos = rec.offset, w = 0;
+    for (const fr of rec.frames) {
+      const a = Math.max(startS, pos), b = Math.min(endS, pos + fr.length);
+      if (b > a) { pcm.set(fr.subarray(a - pos, b - pos), w); w += b - a; }
+      pos += fr.length; if (pos >= endS) break;
+    }
+    const outRate = rec.sr > 16000 ? 16000 : rec.sr;
+    const wav = encodeWav(downsample(pcm, rec.sr, outRate), outRate);
+    rec.opts.onEnd({
+      reason, wav, tEnd,
+      captureMs: speechDur(rec), endpointMs: reason === "endpoint" ? tEnd - rec.lastVoiceWall : 0
+    });
+  }
+  const speechDur = rec => (rec.lastVoice - rec.speechStart) / rec.sr * 1000;
+
+  function downsample(buf, inRate, outRate) {
+    if (inRate === outRate) return buf;
+    const ratio = inRate / outRate, n = Math.floor(buf.length / ratio), out = new Float32Array(n);
+    for (let i = 0; i < n; i++) {
+      const a = Math.floor(i * ratio), b = Math.min(buf.length, Math.floor((i + 1) * ratio));
+      let s = 0; for (let j = a; j < b; j++) s += buf[j];
+      out[i] = b > a ? s / (b - a) : 0;
+    }
+    return out;
+  }
+  function encodeWav(samples, rate) {
+    const buf = new ArrayBuffer(44 + samples.length * 2), v = new DataView(buf);
+    const str = (o, s) => { for (let i = 0; i < s.length; i++) v.setUint8(o + i, s.charCodeAt(i)); };
+    str(0, "RIFF"); v.setUint32(4, 36 + samples.length * 2, true); str(8, "WAVE"); str(12, "fmt ");
+    v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true); v.setUint32(24, rate, true);
+    v.setUint32(28, rate * 2, true); v.setUint16(32, 2, true); v.setUint16(34, 16, true); str(36, "data");
+    v.setUint32(40, samples.length * 2, true);
+    for (let i = 0, o = 44; i < samples.length; i++, o += 2) {
+      const s = Math.max(-1, Math.min(1, samples[i])); v.setInt16(o, s < 0 ? s * 0x8000 : s * 0x7fff, true);
+    }
+    return buf;
+  }
+  function stop() { if (cur) finish(cur, "manual"); }
+  function cancel() { if (cur) finish(cur, "cancel"); }
+  return { start, stop, cancel, unlock, get active() { return !!cur; } };
+})();
+
+/* ============================== Playback (Edge TTS MP3) ============================== */
+const Player = (() => {
+  const el = new Audio(); el.preload = "auto"; el.setAttribute("playsinline", ""); el.setAttribute("webkit-playsinline", "");
+  const SILENT = "data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAIA+AAACABAAZGF0YQAAAAA=";
+  let group = null, queue = [], open = false, playing = false, started = false, url = null, unlocked = false, listener = () => {};
+  const emit = (type, g = group) => listener(type, g);
+  function revoke() { if (url) { URL.revokeObjectURL(url); url = null; } }
+  function unlock() {
+    if (unlocked) return; unlocked = true;
+    // A play() call inside a user gesture "blesses" this element on iOS/Safari, so later
+    // programmatic play() of Edge TTS audio is allowed.
+    try {
+      el.muted = true; el.src = SILENT; const p = el.play();
+      if (p) p.then(() => { if (!group) el.pause(); el.muted = false; })
+               .catch(e => { el.muted = false; if (e && e.name === "NotAllowedError") unlocked = false; });
+      else el.muted = false;
+    } catch { el.muted = false; unlocked = false; }
+  }
+  function next() {
+    revoke();
+    if (!queue.length) { playing = false; if (!open && group) { const g = group; group = null; emit("ended", g); } else if (group) emit("drain"); return; }
+    const blob = queue.shift(); url = URL.createObjectURL(blob);
+    el.muted = false; el.src = url; playing = true;
+    const g = group;
+    const p = el.play();
+    if (p && p.catch) p.catch(err => {
+      if (g !== group) return;
+      playing = false; queue = []; open = false; group = null;
+      emit(err && err.name === "NotAllowedError" ? "blocked" : "error", g);
+    });
+  }
+  el.addEventListener("playing", () => { if (group && !started) { started = true; emit("playing"); } else if (group) emit("resumed"); });
+  el.addEventListener("ended", () => { if (group) next(); });
+  el.addEventListener("error", () => { if (group && playing && el.src && el.src.startsWith("blob:")) { emit("segment_error"); next(); } });
+  return {
+    onEvent(fn) { listener = fn; },
+    unlock,
+    begin(g) { this.stop(true); group = g; open = true; started = false; },
+    push(g, blob) { if (g !== group) return; queue.push(blob); if (!playing) next(); },
+    end(g) { if (g !== group) return; open = false; if (!playing && !queue.length) { group = null; emit("ended", g); } },
+    playList(g, blobs) { this.begin(g); blobs.forEach(b => queue.push(b)); open = false; next(); },
+    stop(silent) {
+      const g = group; queue = []; open = false; playing = false; group = null;
+      if (url || (el.src && el.src.startsWith("blob:"))) {  // never abort the silent unlock clip
+        try { el.pause(); } catch { /* */ }
+        el.removeAttribute("src"); try { el.load(); } catch { /* */ }
+      }
+      revoke();
+      if (g && !silent) emit("stopped", g);
+    },
+    get busy() { return !!group; },
+    get group() { return group; }
+  };
+})();
+
+/* ============================== Local history (IndexedDB) ============================== */
+const History = (() => {
+  let dbp = null, mem = null;
+  function db() {
+    if (dbp) return dbp;
+    dbp = new Promise((resolve, reject) => {
+      if (!("indexedDB" in window)) return reject(new Error("no idb"));
+      const r = indexedDB.open("linguavoice", 1);
+      r.onupgradeneeded = () => { const s = r.result.createObjectStore("history", { keyPath: "id" }); s.createIndex("ts", "ts"); };
+      r.onsuccess = () => resolve(r.result); r.onerror = () => reject(r.error);
+    }).catch(() => { mem = store.get("historyFallback", []); return null; });
+    return dbp;
+  }
+  const tx = (d, mode, fn) => new Promise((res, rej) => {
+    const t = d.transaction("history", mode); const s = t.objectStore("history"); const out = fn(s);
+    t.oncomplete = () => res(out && out.result !== undefined ? out.result : undefined); t.onerror = () => rej(t.error);
+  });
+  return {
+    async add(item) {
+      const d = await db();
+      if (!d) { mem.unshift(item); mem = mem.slice(0, CONFIG.HISTORY_LIMIT); store.set("historyFallback", mem); return; }
+      await tx(d, "readwrite", s => s.put(item));
+      const all = await this.list();
+      if (all.length > CONFIG.HISTORY_LIMIT) await tx(d, "readwrite", s => all.slice(CONFIG.HISTORY_LIMIT).forEach(x => s.delete(x.id)));
+    },
+    async list() {
+      const d = await db();
+      if (!d) return mem.slice();
+      const all = await tx(d, "readonly", s => s.getAll());
+      return (all || []).sort((a, b) => b.ts - a.ts);
+    },
+    async remove(id) { const d = await db(); if (!d) { mem = mem.filter(x => x.id !== id); store.set("historyFallback", mem); return; } await tx(d, "readwrite", s => s.delete(id)); },
+    async clear() { const d = await db(); if (!d) { mem = []; store.set("historyFallback", mem); return; } await tx(d, "readwrite", s => s.clear()); }
+  };
+})();
+
+/* ============================== Voices ============================== */
+const Voices = {
+  list: [], defaults: {}, withVoices: null,
+  async load() {
+    if (!BACKEND.ok) return;
+    try {
+      const r = await fetchTimeout(api("/api/voices"), {}, 15000);
+      if (!r.ok) throw new AppError("voices_unavailable");
+      const j = await r.json();
+      this.list = j.voices || []; this.defaults = j.defaults || {};
+      this.withVoices = new Set(j.languages_with_voices || []);
+    } catch (e) {
+      this.withVoices = null;
+      if (e.code !== "backend_unreachable") toast(T.err.voices_unavailable, true, 4500);
+    }
+  },
+  hasVoice(code) { return !this.withVoices || this.withVoices.has(code); },
+  forLang(code) {
+    const pref = code === "no" ? ["nb", "nn", "no"] : [code];
+    return this.list.filter(v => pref.includes(v.locale.split("-")[0].toLowerCase()));
+  },
+  label(v) {
+    const name = v.id.split("-").slice(2).join("-").replace(/Neural$/, "") || v.id;
+    const g = /female/i.test(v.gender) ? T.female : /male/i.test(v.gender) ? T.male : "";
+    return `${name} · ${v.locale}${g ? " · " + g : ""}`;
+  },
+  chosen(code) { const v = prefs.voices[code]; return v && (this.list.length === 0 || this.list.some(x => x.id === v)) ? v : "auto"; }
+};
+
+/* ============================== App ============================== */
+const App = {
+  job: null,            // the one active request (translate / speak)
+  rec: null,            // recording context
+  last: null,           // last translate-mode result {text, lang, segments, voice, rate}
+  bubbleAudio: new Map(),
+  lastDetected: null,
+
+  init() {
+    this.applyTheme(prefs.theme);
+    this.bindUI();
+    this.renderLangs();
+    this.setMode(prefs.mode, true);
+    $("rateRange").value = prefs.rate; $("rateOut").textContent = (prefs.rate > 0 ? "+" : "") + prefs.rate + "%";
+    $("silenceRange").value = prefs.silenceMs; $("silenceOut").textContent = T.ms(prefs.silenceMs);
+    $("optAutoplay").checked = prefs.autoplay; $("optHistory").checked = prefs.saveHistory; $("optMetrics").checked = prefs.metrics;
+    $("infoUrl").textContent = BACKEND.ok ? BACKEND.base : CONFIG.API_BASE_URL;
+    Player.onEvent((type, g) => this.onPlayer(type, g));
+    Net.onJSON = m => this.onServerJSON(m);
+    Net.onBinary = ab => this.onServerBinary(ab);
+
+    const missing = this.missingFeatures();
+    if (missing) { banner(`<b>${esc(T.status.error)}:</b> ${esc(T.err[missing])}`); }
+    if (!BACKEND.ok) {
+      Net.setConn("unconfigured"); setStatus("error", T.status.offline);
+      banner(`<b>${esc(T.status.error)}:</b> ${esc(T.err[BACKEND.code])}<br><code>const CONFIG = { API_BASE_URL: "https://…" }</code>`);
+      this.renderVoices();
+      return;
+    }
+    setStatus("idle");
+    Net.connect();
+    this.checkHealth();
+    Voices.load().then(() => { this.renderVoices(); this.renderLangs(); });
+  },
+
+  missingFeatures() {
+    if (!window.WebSocket || !(window.AudioContext || window.webkitAudioContext)) return "unsupported";
+    if (!window.isSecureContext) return "insecure";
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) return "unsupported";
+    return null;
+  },
+
+  async checkHealth() {
+    try {
+      const r = await fetchTimeout(api("/api/health"), {}, 20000);
+      const j = await r.json();
+      $("infoModel").textContent = j.model || "—";
+      if (!j.gemini_configured) banner(`<b>${esc(T.status.error)}:</b> ${esc(T.err.server_misconfigured)}`);
+      if (statusKind === "idle") setStatus("ready");
+    } catch {
+      if (!Net.open) { setStatus("offline"); banner(`<b>${esc(T.status.error)}:</b> ${esc(T.err.backend_unreachable)}<br><code>${esc(BACKEND.base)}</code>`); }
+    }
+  },
+
+  /* ---------- UI binding ---------- */
+  bindUI() {
+    $("tabTranslate").onclick = () => this.setMode("translate");
+    $("tabConv").onclick = () => this.setMode("conversation");
+    $("btnTheme").onclick = () => this.toggleTheme();
+    $("btnHistory").onclick = () => this.openHistory();
+    $("btnSettings").onclick = () => this.openSheet("settingsSheet");
+    $("srcBtn").onclick = () => this.openPicker("src");
+    $("tgtBtn").onclick = () => this.openPicker("tgt");
+    $("convABtn").onclick = () => this.openPicker("convA");
+    $("convBBtn").onclick = () => this.openPicker("convB");
+    $("swapBtn").onclick = () => this.swap();
+    $("convSwap").onclick = () => { const a = prefs.convA; savePref("convA", prefs.convB); savePref("convB", a); this.renderLangs(); this.spin("convSwap"); };
+    $("copySrc").onclick = () => copyText($("srcText").textContent);
+    $("copyTgt").onclick = () => copyText($("tgtText").textContent);
+    $("micBtn").onclick = () => this.micPressed({ mode: "translate" });
+    $("cancelBtn").onclick = () => this.cancelRecording();
+    $("stopPlayBtn").onclick = () => this.stopAll();
+    $("convStop").onclick = () => this.stopAll();
+    $("spkA").onclick = () => this.micPressed({ mode: "conversation", speaker: "a" });
+    $("spkB").onclick = () => this.micPressed({ mode: "conversation", speaker: "b" });
+    $("playBtn").onclick = () => this.playPressed(false);
+    $("replayBtn").onclick = () => this.playPressed(true);
+    $("voiceSel").onchange = e => { const v = { ...prefs.voices, [prefs.tgt]: e.target.value }; savePref("voices", v); };
+    $("rateRange").oninput = e => { const v = +e.target.value; $("rateOut").textContent = (v > 0 ? "+" : "") + v + "%"; savePref("rate", v); };
+    $("silenceRange").oninput = e => { const v = +e.target.value; $("silenceOut").textContent = T.ms(v); savePref("silenceMs", v); };
+    $("optAutoplay").onchange = e => savePref("autoplay", e.target.checked);
+    $("optHistory").onchange = e => savePref("saveHistory", e.target.checked);
+    $("optMetrics").onchange = e => { savePref("metrics", e.target.checked); $("metrics").hidden = !e.target.checked || prefs.mode !== "translate"; };
+    $("langSearch").oninput = () => this.renderPickerList();
+    $("histClear").onclick = async () => { if (confirm(T.confirmClear)) { await History.clear(); this.renderHistory(); toast(T.cleared); } };
+    document.querySelectorAll(".sheet").forEach(s => {
+      s.addEventListener("click", e => { if (e.target === s || e.target.closest("[data-close]")) this.closeSheet(s); });
+    });
+    document.addEventListener("keydown", e => {
+      if (e.key === "Escape") { const open = [...document.querySelectorAll(".sheet")].find(s => !s.hidden); if (open) this.closeSheet(open); return; }
+      const tag = (e.target.tagName || "").toLowerCase();
+      if (e.code === "Space" && !e.repeat && !["input", "select", "textarea", "button"].includes(tag) && ![...document.querySelectorAll(".sheet")].some(s => !s.hidden)) {
+        e.preventDefault(); if (prefs.mode === "translate") this.micPressed({ mode: "translate" });
+      }
+    });
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "hidden") {
+        if (Recorder.active) { this.cancelRecording(); }
+      } else if (BACKEND.ok && !Net.open) Net.connect();
+    });
+    window.addEventListener("pagehide", () => { Recorder.cancel(); });
+    window.addEventListener("resize", () => this.updateDockHeight());
+    window.addEventListener("online", () => BACKEND.ok && Net.connect());
+  },
+
+  spin(id) { const b = $(id); b.classList.toggle("spin"); },
+  applyTheme(theme) {
+    if (theme) document.documentElement.dataset.theme = theme; else delete document.documentElement.dataset.theme;
+    const dark = theme ? theme === "dark" : matchMedia("(prefers-color-scheme: dark)").matches;
+    $("icoMoon").hidden = dark; $("icoSun").hidden = !dark;
+    document.querySelector('meta[name="theme-color"]').content = dark ? "#0B0E1C" : "#F3F5FB";
+  },
+  toggleTheme() {
+    const dark = document.documentElement.dataset.theme ? document.documentElement.dataset.theme === "dark" : matchMedia("(prefers-color-scheme: dark)").matches;
+    savePref("theme", dark ? "light" : "dark"); this.applyTheme(prefs.theme);
+  },
+
+  setMode(mode, initial) {
+    if (!initial && Recorder.active) this.cancelRecording();
+    savePref("mode", mode);
+    const tr = mode === "translate";
+    $("tabTranslate").setAttribute("aria-selected", tr); $("tabConv").setAttribute("aria-selected", !tr);
+    $("viewTranslate").hidden = !tr; $("viewConv").hidden = tr;
+    $("dockTranslate").hidden = !tr; $("dockConv").hidden = tr;
+    $("metrics").hidden = !(tr && prefs.metrics);
+    this.updateDockHeight();
+  },
+  updateDockHeight() { requestAnimationFrame(() => document.documentElement.style.setProperty("--dock-h", $("dock").offsetHeight + "px")); },
+
+  /* ---------- languages ---------- */
+  renderLangs() {
+    $("srcName").textContent = prefs.src === "auto" ? T.autoShort : langName(prefs.src);
+    $("tgtName").textContent = langName(prefs.tgt);
+    $("convAName").textContent = langName(prefs.convA); $("convBName").textContent = langName(prefs.convB);
+    $("spkALang").textContent = `${prefs.convA.toUpperCase()} → ${prefs.convB.toUpperCase()}`;
+    $("spkBLang").textContent = `${prefs.convB.toUpperCase()} → ${prefs.convA.toUpperCase()}`;
+    this.renderVoices();
+  },
+  swap() {
+    let newTgt = prefs.src;
+    if (prefs.src === "auto") {
+      if (this.lastDetected && LANG[this.lastDetected] && this.lastDetected !== prefs.tgt) newTgt = this.lastDetected;
+      else { toast(T.err.swap_need_lang); return; }
+    }
+    savePref("src", prefs.tgt); savePref("tgt", newTgt);
+    if (!Voices.hasVoice(newTgt)) toast(T.err.no_voice_for_target, true);
+    const s = $("srcText").textContent, t = $("tgtText").textContent;
+    if (s || t) { $("srcText").textContent = t; $("tgtText").textContent = s; this.last = null; this.updatePlayButtons(); }
+    $("detChip").hidden = true;
+    this.renderLangs(); this.spin("swapBtn");
+  },
+  pickerKind: null,
+  openPicker(kind) {
+    this.pickerKind = kind;
+    $("langSheetTitle").textContent = { src: T.pickSrc, tgt: T.pickTgt, convA: T.pickA, convB: T.pickB }[kind];
+    $("langSearch").value = "";
+    this.renderPickerList();
+    this.openSheet("langSheet");
+    if (matchMedia("(pointer:fine)").matches) setTimeout(() => $("langSearch").focus(), 50);
+  },
+  renderPickerList() {
+    const kind = this.pickerKind, q = $("langSearch").value.trim().toLowerCase();
+    const current = prefs[kind];
+    let items = LANGS.slice();
+    if (kind !== "src") items = items.filter(l => Voices.hasVoice(l.code)); // output languages need an Edge TTS voice
+    if (kind === "src") items.unshift({ code: "auto", kk: T.auto, native: "Auto" });
+    if (q) items = items.filter(l => (l.kk + " " + l.native + " " + l.code).toLowerCase().includes(q));
+    const ul = $("langList");
+    ul.innerHTML = items.length ? items.map(l => `<li><button role="option" data-code="${l.code}" aria-selected="${l.code === current}">
+      <span class="code">${l.code === "auto" ? "★" : l.code}</span><span class="nm"><b>${esc(l.kk)}</b><small>${esc(l.native)}</small></span>
+      ${l.code === current ? '<span class="tick">✓</span>' : ""}</button></li>`).join("") : `<li class="empty-note">${esc(T.noLang)}</li>`;
+    ul.querySelectorAll("button").forEach(b => b.onclick = () => this.pickLang(b.dataset.code));
+  },
+  pickLang(code) {
+    const kind = this.pickerKind;
+    if (kind === "tgt" && code === prefs.src) savePref("src", prefs.tgt === code ? "auto" : prefs.tgt);
+    if (kind === "convA" && code === prefs.convB) savePref("convB", prefs.convA);
+    if (kind === "convB" && code === prefs.convA) savePref("convA", prefs.convB);
+    savePref(kind, code);
+    if (kind === "tgt") { this.last = null; this.updatePlayButtons(); }
+    this.renderLangs(); this.closeSheet($("langSheet"));
+  },
+  renderVoices() {
+    const sel = $("voiceSel"), lang = prefs.tgt, vs = Voices.forLang(lang);
+    const def = Voices.defaults[lang];
+    const defV = vs.find(v => v.id === def);
+    sel.innerHTML = `<option value="auto">${esc(T.autoVoice)}${defV ? " — " + esc(Voices.label(defV)) : ""}</option>` +
+      vs.map(v => `<option value="${esc(v.id)}">${esc(Voices.label(v))}</option>`).join("");
+    sel.value = Voices.chosen(lang);
+    if (sel.value === "") sel.value = "auto";
+  },
+
+  /* ---------- sheets ---------- */
+  lastFocus: null,
+  openSheet(id) { this.lastFocus = document.activeElement; const s = $(id); s.hidden = false; const f = s.querySelector("[data-close]"); if (f && !matchMedia("(pointer:fine)").matches) f.focus({ preventScroll: true }); },
+  closeSheet(s) { s.hidden = true; if (this.lastFocus && this.lastFocus.focus) this.lastFocus.focus({ preventScroll: true }); },
+
+  /* ---------- recording ---------- */
+  micState(state, speaker) {
+    const mic = $("micBtn");
+    mic.dataset.state = prefs.mode === "translate" ? state : "idle";
+    mic.setAttribute("aria-label", state === "listening" ? "Жазуды тоқтату" : "Сөйлеуді бастау");
+    $("cancelBtn").classList.toggle("ghost", state !== "listening");
+    ["a", "b"].forEach(k => { const b = $("spk" + k.toUpperCase()); b.dataset.state = (speaker === k) ? state : "idle"; });
+  },
+  setLevel(level, speaker) {
+    if (speaker) $("spk" + speaker.toUpperCase()).style.setProperty("--level", level.toFixed(2));
+    else $("micBtn").style.setProperty("--level", level.toFixed(2));
+  },
+  cancelRecording() {
+    if (!Recorder.active && !this.rec) return;
+    Recorder.cancel(); this.rec = null; this.micState("idle"); setStatus("ready");
+  },
+  stopAll() {
+    Player.stop();
+    if (this.job && this.job.kind === "speak") this.cancelJob();
+    this.updatePlayButtons();
+  },
+
+  async micPressed(ctx) {
+    // Must run inside the user gesture: unlock audio output for later playback (iOS/Safari autoplay rules).
+    Player.unlock();
+    if (Recorder.active) {
+      const same = this.rec && this.rec.mode === ctx.mode && this.rec.speaker === ctx.speaker;
+      if (same) { Recorder.stop(); return; }   // second tap = "I'm done speaking"
+      Recorder.cancel();
+    } else if (this.rec) {                     // still waiting for microphone permission
+      this.rec = null; this.micState("idle"); setStatus("ready"); return;
+    }
+    const missing = this.missingFeatures();
+    if (missing) { this.fail(missing); return; }
+    if (!BACKEND.ok) { this.fail(BACKEND.code); return; }
+    // Feedback-loop protection: never record while our own voice is playing.
+    Player.stop(true);
+    this.cancelJob();
+    const rc = { ...ctx, id: uid() };
+    if (ctx.mode === "conversation") {
+      rc.source = ctx.speaker === "a" ? prefs.convA : prefs.convB;
+      rc.target = ctx.speaker === "a" ? prefs.convB : prefs.convA;
+    } else { rc.source = prefs.src; rc.target = prefs.tgt; }
+    if (!Voices.hasVoice(rc.target)) { this.fail("no_voice_for_target"); return; }
+    this.rec = rc;
+    this.micState("listening", ctx.speaker);
+    setStatus("listening");
+    if (!Net.open) Net.connect(); // warm the connection while the user speaks
+    try {
+      await Recorder.start({
+        silenceMs: prefs.silenceMs,
+        onLevel: lv => this.setLevel(lv, ctx.speaker),
+        onSpeech: on => { $("micBtn").dataset.speech = on ? "1" : "0"; setStatus(on ? "hearing" : "listening"); },
+        onEnd: res => this.onUtterance(rc, res)
+      });
+      if (this.rec !== rc) Recorder.cancel();  // cancelled while the permission prompt was open
+    } catch (e) {
+      if (this.rec === rc) this.rec = null;
+      this.micState("idle");
+      this.fail(e.code || "mic_failed");
+    }
+  },
+
+  onUtterance(rc, res) {
+    if (this.rec !== rc) return;
+    this.rec = null;
+    this.setLevel(0, rc.speaker); $("micBtn").dataset.speech = "0";
+    if (res.reason === "cancel") { this.micState("idle"); return; }
+    if (res.reason === "no_speech") { this.micState("idle"); this.fail("no_speech"); return; }
+    this.micState("busy", rc.speaker);
+    this.sendTranslation(rc, res);
+  },
+
+  /* ---------- jobs ---------- */
+  newJob(kind, extra) {
+    this.cancelJob();
+    const job = { id: uid(), kind, segments: [], gotResult: false, ttsDone: false, playStarted: false, abort: new AbortController(), timer: 0, ...extra };
+    this.job = job;
+    this.armTimeout(job);
+    return job;
+  },
+  armTimeout(job) {
+    clearTimeout(job.timer);
+    job.timer = setTimeout(() => { if (this.job === job) this.jobError(job, "timeout"); }, CONFIG.REQUEST_TIMEOUT_MS);
+  },
+  cancelJob() {
+    const job = this.job; if (!job) return;
+    this.job = null; clearTimeout(job.timer);
+    try { job.abort.abort(); } catch { /* */ }
+    if (Net.open) Net.send({ type: "cancel", id: job.id });
+    if (job.bubble && !job.gotResult) job.bubble.remove();
+    if (Player.group === job.id) Player.stop(true);
+  },
+  finishJob(job) {
+    if (this.job !== job) return;
+    clearTimeout(job.timer); this.job = null;
+    this.micState("idle");
+    if (!Player.busy) setStatus("ready");
+    this.updatePlayButtons();
+  },
+
+  async sendTranslation(rc, res) {
+    const voice = Voices.chosen(rc.target);
+    const job = this.newJob("translate", {
+      ctx: rc, voice, rate: prefs.rate, wantPlay: prefs.autoplay,
+      m: { capture: res.captureMs, endpoint: res.endpointMs, tEnd: res.tEnd }
+    });
+    setStatus("processing");
+    if (rc.mode === "translate") {
+      $("srcText").textContent = ""; $("tgtText").textContent = ""; $("detChip").hidden = true; $("tgtChip").hidden = true;
+      $("srcText").classList.add("live"); this.last = null; this.updatePlayButtons(); this.renderMetrics(job);
+    } else {
+      job.bubble = this.addBubble(rc);
+    }
+    if (job.wantPlay) Player.begin(job.id);
+    const header = { type: "translate", id: job.id, source_lang: rc.source, target_lang: rc.target,
+      voice, rate: prefs.rate, tts: true, mime: "audio/wav" };
+    if (Net.open || await Net.waitOpen(2500)) {
+      if (this.job !== job) return;
+      Net.sendFrame(header, res.wav);
+      job.m.sent = now();
+    } else {
+      if (this.job !== job) return;
+      job.viaHttp = true;
+      this.translateHttp(job, rc, res.wav).catch(e => { if (this.job === job) this.jobError(job, e.code || "translate_failed"); });
+    }
+  },
+
+  async translateHttp(job, rc, wav) {
+    const fd = new FormData();
+    fd.append("audio", new Blob([wav], { type: "audio/wav" }), "speech.wav");
+    fd.append("source_lang", rc.source); fd.append("target_lang", rc.target);
+    job.m.sent = now();
+    const r = await fetchTimeout(api("/api/translate"), { method: "POST", body: fd, signal: job.abort.signal });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) throw new AppError((j.error && j.error.code) || "translate_failed");
+    if (this.job !== job) return;
+    this.onResult(job, { ...j, voice: job.voice });
+    setStatus("tts");
+    const t0 = now();
+    const a = await fetchTimeout(api("/api/tts"), { method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text: j.translated_text, lang: rc.target, voice: job.voice, rate: job.rate }), signal: job.abort.signal });
+    if (!a.ok) { const e = await a.json().catch(() => ({})); throw new AppError((e.error && e.error.code) || "tts_unavailable"); }
+    const blob = await a.blob();
+    if (this.job !== job) return;
+    job.m.ttsFirst = now() - t0;
+    this.onAudio(job, 0, blob);
+    this.onTtsDone(job, { segments: 1, tts_first_ms: job.m.ttsFirst });
+  },
+
+  speak({ text, lang, voice, rate, onAudioDone, bubble }) {
+    Player.unlock();
+    if (Recorder.active) this.cancelRecording();
+    const job = this.newJob("speak", { voice, rate, wantPlay: true, onAudioDone, lang, text, speakBubble: bubble });
+    Player.begin(job.id);
+    setStatus("tts");
+    this.updatePlayButtons();
+    const go = async () => {
+      if (Net.open || await Net.waitOpen(2500)) {
+        if (this.job === job) Net.send({ type: "speak", id: job.id, text, lang, voice, rate });
+        return;
+      }
+      job.viaHttp = true;
+      const a = await fetchTimeout(api("/api/tts"), { method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text, lang, voice, rate }), signal: job.abort.signal });
+      if (!a.ok) { const e = await a.json().catch(() => ({})); throw new AppError((e.error && e.error.code) || "tts_unavailable"); }
+      const blob = await a.blob();
+      if (this.job !== job) return;
+      this.onAudio(job, 0, blob); this.onTtsDone(job, { segments: 1 });
+    };
+    go().catch(e => { if (this.job === job) this.jobError(job, e.code || "tts_unavailable"); });
+  },
+
+  /* ---------- server messages ---------- */
+  onServerJSON(m) {
+    const job = this.job;
+    if (!job || m.id !== job.id) return;            // stale or unrelated
+    switch (m.type) {
+      case "status":
+        if (m.stage === "recognizing") setStatus("processing");
+        else if (m.stage === "translating") setStatus("translating");
+        else if (m.stage === "tts" && !job.playStarted) setStatus("tts");
+        break;
+      case "partial": this.onPartial(job, m); break;
+      case "result": this.onResult(job, m); break;
+      case "tts_done": this.onTtsDone(job, m); break;
+      case "error": this.jobError(job, m.code); break;
+    }
+  },
+  onServerBinary(ab) {
+    let fr; try { fr = unpackFrame(ab); } catch { return; }
+    const job = this.job;
+    if (!job || fr.header.id !== job.id) return;
+    this.onAudio(job, fr.header.seq, new Blob([fr.payload], { type: fr.header.mime || "audio/mpeg" }));
+  },
+
+  onPartial(job, m) {
+    if (job.kind !== "translate") return;
+    const rc = job.ctx;
+    if (rc.mode === "translate") {
+      if (m.recognized_text) $("srcText").textContent = m.recognized_text;
+      if (m.translated_text) { $("srcText").classList.remove("live"); $("tgtText").textContent = m.translated_text; $("tgtText").classList.add("live"); }
+    } else if (job.bubble) {
+      job.bubble.querySelector(".b-src").textContent = m.recognized_text || "";
+      job.bubble.querySelector(".b-tr").textContent = m.translated_text || "";
+    }
+  },
+
+  onResult(job, m) {
+    job.gotResult = true;
+    job.m.gemini = m.timings ? m.timings.gemini_ms : null;
+    job.m.geminiFirst = m.timings ? m.timings.gemini_first_token_ms : null;
+    job.m.result = now();
+    const rc = job.ctx, det = m.detected_language;
+    job.result = { src: m.recognized_text, tr: m.translated_text, det, voice: m.voice || job.voice };
+    if (rc.mode === "translate") {
+      this.lastDetected = det;
+      $("srcText").classList.remove("live"); $("tgtText").classList.remove("live");
+      $("srcText").textContent = m.recognized_text; $("tgtText").textContent = m.translated_text;
+      $("detChip").textContent = rc.source === "auto" ? T.autoDetected(langName(det)) : langName(det);
+      $("detChip").hidden = !det;
+      $("tgtChip").textContent = langName(rc.target); $("tgtChip").hidden = false;
+      this.last = { text: m.translated_text, lang: rc.target, segments: [], voice: job.voice, rate: job.rate, complete: false };
+      this.renderMetrics(job);
+    } else if (job.bubble) {
+      job.bubble.querySelector(".b-src").textContent = m.recognized_text;
+      job.bubble.querySelector(".b-tr").textContent = m.translated_text;
+      job.bubble.dataset.text = m.translated_text;
+      job.bubble.dataset.done = "1";
+    }
+    if (!job.playStarted && statusKind !== "playing") setStatus("tts");
+    this.armTimeout(job); // fresh timeout for the voice
+    if (prefs.saveHistory && m.recognized_text) {
+      History.add({ id: job.id, ts: Date.now(), mode: rc.mode, speaker: rc.speaker || null, src: det, tgt: rc.target,
+        source_text: m.recognized_text, translated_text: m.translated_text }).catch(() => {});
+    }
+    this.updatePlayButtons();
+  },
+
+  onAudio(job, seq, blob) {
+    job.segments[seq] = blob;
+    if (job.m && job.m.ttsFirstAt === undefined) job.m.ttsFirstAt = now();
+    if (job.wantPlay) Player.push(job.id, blob);
+  },
+
+  onTtsDone(job, m) {
+    job.ttsDone = true;
+    if (job.m) { job.m.ttsFirst = m.tts_first_ms != null ? m.tts_first_ms : job.m.ttsFirst; }
+    const segs = job.segments.filter(Boolean);
+    if (job.kind === "translate") {
+      if (job.ctx.mode === "translate" && this.last) { this.last.segments = segs; this.last.complete = true; }
+      if (job.bubble) this.bubbleAudio.set(job.bubble.dataset.id, { segments: segs, voice: job.voice, rate: job.rate });
+      this.renderMetrics(job);
+    } else if (job.onAudioDone) job.onAudioDone(segs);
+    if (job.wantPlay) Player.end(job.id);
+    this.finishJob(job);
+  },
+
+  jobError(job, code) {
+    if (this.job !== job) return;
+    const ttsStage = String(code).startsWith("tts") ;
+    clearTimeout(job.timer); this.job = null;
+    if (Player.group === job.id) Player.stop(true);
+    try { job.abort.abort(); } catch { /* */ }
+    if (code === "timeout" && Net.open) Net.send({ type: "cancel", id: job.id });
+    if (job.bubble) {
+      if (!job.gotResult) { job.bubble.classList.add("err"); job.bubble.querySelector(".b-tr").textContent = errText(code); }
+    }
+    if (job.kind === "translate" && job.ctx.mode === "translate" && !job.gotResult) {
+      $("srcText").classList.remove("live"); $("tgtText").classList.remove("live");
+    }
+    this.micState("idle");
+    this.fail(code, ttsStage && job.gotResult);
+    this.updatePlayButtons();
+  },
+
+  fail(code, soft) {
+    const msg = errText(code);
+    setStatus("error", soft ? msg : T.status.error + ": " + msg);
+    toast(msg, true, 5200);
+  },
+
+  onConnectionLost() {
+    const job = this.job;
+    // the server cannot finish a WebSocket job whose connection is gone
+    if (job && !job.viaHttp && !job.ttsDone) this.jobError(job, "ws_lost");
+  },
+
+  /* ---------- playback ---------- */
+  onPlayer(type, g) {
+    const job = this.job && this.job.id === g ? this.job : null;
+    if (type === "playing") {
+      setStatus("playing");
+      if (job) { job.playStarted = true; if (job.m && job.m.tEnd && !job.m.total && job.kind === "translate") { job.m.total = now() - job.m.tEnd; this.renderMetrics(job); } }
+    } else if (type === "drain") {
+      if (job && !job.ttsDone) setStatus("tts");
+    } else if (type === "ended" || type === "stopped") {
+      if (!this.job && !Recorder.active) setStatus("ready");
+    } else if (type === "blocked") {
+      setStatus("ready"); toast(T.err.playback_blocked, false, 5000);
+    } else if (type === "error" || type === "segment_error") {
+      toast(T.err.playback_failed, true);
+    }
+    this.updatePlayButtons();
+  },
+  updatePlayButtons() {
+    const hasText = !!$("tgtText").textContent && !$("tgtText").classList.contains("live");
+    const playingMine = Player.busy && (!this.job || this.job.kind !== "translate" || this.job.ctx.mode === "translate");
+    $("playBtn").disabled = !hasText && !playingMine;
+    $("replayBtn").disabled = !hasText;
+    $("playLabel").textContent = playingMine ? T.stop : T.playLbl;
+    $("icoPlay").hidden = playingMine; $("icoPause").hidden = !playingMine;
+    const anyAudio = Player.busy || (this.job && this.job.kind === "speak");
+    $("stopPlayBtn").classList.toggle("ghost", !anyAudio);
+  },
+  playPressed(replay) {
+    Player.unlock();
+    if (!replay && Player.busy) { this.stopAll(); return; }
+    const text = $("tgtText").textContent; if (!text) return;
+    const voice = Voices.chosen(prefs.tgt), rate = prefs.rate;
+    const l = this.last;
+    if (l && l.complete && l.segments.length && l.text === text && l.voice === voice && l.rate === rate && l.lang === prefs.tgt) {
+      if (Recorder.active) this.cancelRecording();
+      this.cancelJob(); Player.playList("replay-" + uid(), l.segments); return;
+    }
+    // voice / speed changed (or nothing cached): synthesize again with Edge TTS
+    const lang = (l && l.lang) || prefs.tgt;
+    this.speak({ text, lang, voice, rate, onAudioDone: segs => { this.last = { text, lang, segments: segs, voice, rate, complete: true }; } });
+  },
+
+  /* ---------- conversation ---------- */
+  addBubble(rc) {
+    $("chatEmpty").hidden = true;
+    const b = document.createElement("div");
+    b.className = "bubble " + rc.speaker; b.dataset.id = uid(); b.dataset.lang = rc.target;
+    b.innerHTML = `<div class="b-meta">${esc(T.speaker(rc.speaker === "a" ? 1 : 2))} · ${esc(langName(rc.source))} → ${esc(langName(rc.target))}</div>
+      <p class="b-src"></p><p class="b-tr"></p>
+      <div class="b-actions">
+        <button data-act="replay" aria-label="Қайта тыңдау" title="Қайта тыңдау"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg></button>
+        <button data-act="copy" aria-label="Көшіру" title="Көшіру"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><rect x="8" y="8" width="12" height="12" rx="3"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></svg></button>
+      </div>`;
+    b.querySelector('[data-act="copy"]').onclick = () => copyText(b.querySelector(".b-tr").textContent);
+    b.querySelector('[data-act="replay"]').onclick = () => this.replayBubble(b);
+    $("chat").appendChild(b);
+    b.scrollIntoView({ behavior: "smooth", block: "end" });
+    return b;
+  },
+  replayBubble(b) {
+    if (b.dataset.done !== "1") return;
+    Player.unlock();
+    const cached = this.bubbleAudio.get(b.dataset.id);
+    if (cached && cached.segments.length) {
+      if (Recorder.active) this.cancelRecording();
+      this.cancelJob(); Player.playList("bubble-" + uid(), cached.segments); return;
+    }
+    this.speak({ text: b.dataset.text, lang: b.dataset.lang, voice: Voices.chosen(b.dataset.lang), rate: prefs.rate,
+      onAudioDone: segs => this.bubbleAudio.set(b.dataset.id, { segments: segs }) });
+  },
+
+  /* ---------- history ---------- */
+  async openHistory() { await this.renderHistory(); this.openSheet("historySheet"); },
+  async renderHistory() {
+    const body = $("histBody");
+    let items = [];
+    try { items = await History.list(); } catch { items = []; }
+    $("histClear").hidden = !items.length;
+    if (!items.length) { body.innerHTML = `<p class="empty-note">${esc(prefs.saveHistory ? T.histEmpty : T.histOff)}</p>`; return; }
+    let fmt;
+    try { fmt = new Intl.DateTimeFormat("kk-KZ", { dateStyle: "short", timeStyle: "short" }); }
+    catch { fmt = { format: d => d.toLocaleString() }; }
+    body.innerHTML = items.map(it => `<div class="hist-item" data-id="${esc(it.id)}">
+      <div class="hist-meta"><span>${esc(langName(it.src))} → ${esc(langName(it.tgt))}</span><span>${esc(fmt.format(new Date(it.ts)))}</span></div>
+      <p class="hist-src">${esc(it.source_text)}</p><p class="hist-tr">${esc(it.translated_text)}</p>
+      <div class="hist-actions">
+        <button data-act="play">▶ ${esc(T.play)}</button>
+        <button data-act="csrc">${esc(T.copySrc)}</button>
+        <button data-act="ctr">${esc(T.copyTr)}</button>
+        <button data-act="del" class="del">${esc(T.del)}</button>
+      </div></div>`).join("");
+    const byId = Object.fromEntries(items.map(i => [i.id, i]));
+    body.querySelectorAll(".hist-item").forEach(el => {
+      const it = byId[el.dataset.id];
+      el.querySelector('[data-act="play"]').onclick = () => this.speak({ text: it.translated_text, lang: it.tgt, voice: Voices.chosen(it.tgt), rate: prefs.rate });
+      el.querySelector('[data-act="csrc"]').onclick = () => copyText(it.source_text);
+      el.querySelector('[data-act="ctr"]').onclick = () => copyText(it.translated_text);
+      el.querySelector('[data-act="del"]').onclick = async () => { await History.remove(it.id); el.remove(); toast(T.deleted); if (!body.querySelector(".hist-item")) this.renderHistory(); };
+    });
+  },
+
+  /* ---------- metrics ---------- */
+  renderMetrics(job) {
+    const m = job.m || {}, f = v => (v == null || isNaN(v)) ? "—" : T.ms(v);
+    $("mCapture").textContent = f(m.capture);
+    $("mEndpoint").textContent = m.endpoint ? f(m.endpoint) : (m.capture ? "қолмен" : "—");
+    $("mGemini").textContent = m.gemini != null ? `${f(m.geminiFirst)} / ${f(m.gemini)}` : "—";
+    $("mTts").textContent = f(m.ttsFirst);
+    $("mTotal").textContent = m.total ? f(m.total + (m.endpoint || 0)) : "—";
+  }
+};
+
+document.addEventListener("DOMContentLoaded", () => App.init());
+</script>
+</body>
+</html>
