@@ -1,0 +1,21 @@
+# Optional Render Blueprint. If you use it, move this file to the ROOT of your repository.
+# (Manual setup through the Render dashboard works just as well — see README.)
+services:
+  - type: web
+    name: linguavoice-backend
+    runtime: python
+    region: frankfurt          # closest Render region to Central Asia
+    plan: free
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT --proxy-headers --forwarded-allow-ips='*' --ws-ping-interval 20 --ws-ping-timeout 20
+    healthCheckPath: /api/health
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.8
+      - key: GEMINI_API_KEY
+        sync: false            # you will be asked for the value; it is never stored in the repo
+      - key: GEMINI_MODEL
+        value: gemini-3.5-flash-lite
+      - key: ALLOWED_ORIGINS
+        sync: false
