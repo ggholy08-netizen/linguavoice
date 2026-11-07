@@ -44,7 +44,7 @@ class Settings:
     # "" = automatic per model; or minimal / low / medium / high; or "off" to send no thinking config.
     gemini_thinking_level: str = field(default_factory=lambda: os.getenv("GEMINI_THINKING_LEVEL", "").strip().lower())
     gemini_timeout_s: int = field(default_factory=lambda: _int("GEMINI_TIMEOUT_S", 25))
-    gemini_max_output_tokens: int = field(default_factory=lambda: _int("GEMINI_MAX_OUTPUT_TOKENS", 4096))
+    gemini_max_output_tokens: int = field(default_factory=lambda: _int("GEMINI_MAX_OUTPUT_TOKENS", 8192))
 
     tts_timeout_s: int = field(default_factory=lambda: _int("TTS_TIMEOUT_S", 20))
     tts_parallel_segments: int = field(default_factory=lambda: _int("TTS_PARALLEL_SEGMENTS", 2))
@@ -57,7 +57,8 @@ class Settings:
         )
     )
     max_audio_bytes: int = field(default_factory=lambda: _int("MAX_AUDIO_BYTES", 3_000_000))  # ~90 s of 16 kHz WAV
-    max_tts_chars: int = field(default_factory=lambda: _int("MAX_TTS_CHARS", 3000))
+    max_tts_chars: int = field(default_factory=lambda: _int("MAX_TTS_CHARS", 6000))
+    max_text_chars: int = field(default_factory=lambda: _int("MAX_TEXT_CHARS", 3000))  # typed text to translate
     rate_limit_per_min: int = field(default_factory=lambda: _int("RATE_LIMIT_PER_MIN", 30))
     trust_proxy_headers: bool = field(default_factory=lambda: _bool("TRUST_PROXY_HEADERS", True))
     log_level: str = field(default_factory=lambda: os.getenv("LOG_LEVEL", "INFO").upper())

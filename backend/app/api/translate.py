@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, File, Form, Request, UploadFile
 from fastapi.responses import JSONResponse
+from pydantic import BaseModel
 
 from ..config import get_settings
 from ..deps import get_limiter, get_translator
@@ -54,3 +55,34 @@ async def translate(
         "timings": {"gemini_ms": ev.total_ms, "gemini_first_token_ms": ev.first_token_ms},
     }
 
+
+class TextRequest(BaseModel):
+    text: str
+    source_lang: str = "auto"
+    target_lang: str
+
+
+@router.post("/translate_text")
+async def translate_text(req: TextRequest, request: Request):
+    s = get_settings()
+    if not get_limiter().allow(client_key(request, s)):
+        return _err("rate_limited", "Too many requests", 429)
+    if not is_supported(req.target_lang) or (req.source_lang != "auto" and not is_supported(req.source_lang)):
+        return _err("bad_request", "Unsupported language", 400)
+    text = req.text.strip()
+    if not text:
+        return _err("empty_text", "Text is empty", 400)
+    if len(text) > s.max_text_chars:
+        return _err("text_too_long", "Text is too long", 413)
+    try:
+        ev = await get_translator().translate_text(text, req.source_lang, req.target_lang)
+    except TranslationError as e:
+        return _err(e.code, e.message, e.status)
+    if not ev.translated_text:
+        return _err("translate_failed", "Empty translation", 502)
+    return {
+        "detected_language": ev.detected_language,
+        "recognized_text": ev.recognized_text,
+        "translated_text": ev.translated_text,
+        "timings": {"gemini_ms": ev.total_ms, "gemini_first_token_ms": ev.first_token_ms},
+    }

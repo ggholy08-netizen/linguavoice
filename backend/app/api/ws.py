@@ -8,7 +8,8 @@ Client -> server
   binary frame : [uint32 BE header length][JSON header][audio bytes]
                  header = {"type":"translate","id":str,"source_lang":"auto"|code,"target_lang":code,
                            "voice":"auto"|id,"rate":int,"tts":bool,"mime":"audio/wav"}
-  text JSON    : {"type":"speak","id","text","lang","voice","rate"}
+  text JSON    : {"type":"translate_text","id","text","source_lang","target_lang","voice","rate","tts"}
+                 {"type":"speak","id","text","lang","voice","rate"}
                  {"type":"cancel","id"} | {"type":"ping"}
 Server -> client
   text JSON    : ready | status | partial | result | tts_done | error | pong | cancelled
@@ -119,8 +120,9 @@ class Session:
         return send
 
     # ---------- pipelines ----------
-    async def run_translate(self, rid: str, h: dict, audio: bytes) -> None:
+    async def run_translate(self, rid: str, h: dict, audio: bytes | None, text: str | None = None) -> None:
         t_recv = time.perf_counter()
+        typed = text is not None
         source, target = h["source_lang"], h["target_lang"]
         want_tts = bool(h.get("tts", True))
         rate = int(h.get("rate", 0))
@@ -130,11 +132,16 @@ class Session:
             voice = await self.tts.resolve_voice(target, h.get("voice") or "auto")
             pipeline = TTSPipeline(self.tts, voice, rate, self._audio_sender(rid), self.settings.tts_parallel_segments)
         seg = SentenceSegmenter()
-        await self.send_json({"type": "status", "id": rid, "stage": "recognizing"})
-        sent_translating = False
+        await self.send_json({"type": "status", "id": rid, "stage": "translating" if typed else "recognizing"})
+        sent_translating = typed
         final = None
+        events = (
+            self.translator.stream_translate_text(text, source, target)
+            if typed
+            else self.translator.stream_translate(audio, h.get("mime", "audio/wav"), source, target)
+        )
         try:
-            async for ev in self.translator.stream_translate(audio, h.get("mime", "audio/wav"), source, target):
+            async for ev in events:
                 if ev.kind == "partial":
                     if ev.translated_text and not sent_translating:
                         sent_translating = True
@@ -145,13 +152,18 @@ class Session:
                             "recognized_text": ev.recognized_text, "translated_text": ev.translated_text,
                         }
                     )
-                    if pipeline and ev.translated_text and ev.detected_language != "und":
+                    if pipeline and ev.translated_text and (typed or ev.detected_language != "und"):
                         for s in seg.feed(ev.translated_text):
                             pipeline.add(s)  # Edge TTS starts on the first full sentence
                 else:
                     final = ev
             assert final is not None
-            if not final.recognized_text or final.detected_language == "und" or not final.translated_text:
+            if typed and not final.translated_text:
+                if pipeline:
+                    pipeline.cancel()
+                await self.error(rid, "translate_failed", "Gemini returned an empty translation")
+                return
+            if not typed and (not final.recognized_text or final.detected_language == "und" or not final.translated_text):
                 if pipeline:
                     pipeline.cancel()
                 await self.error(rid, "no_speech", "No intelligible speech detected")
@@ -258,6 +270,28 @@ class Session:
             if rid is None or rid == self.job_id:
                 await self.cancel_job()
             await self.send_json({"type": "cancelled", "id": rid})
+        elif t == "translate_text":
+            text = m.get("text")
+            target, source = m.get("target_lang"), m.get("source_lang", "auto")
+            if not isinstance(text, str) or not text.strip():
+                await self.error(rid, "empty_text", "text required")
+                return
+            if len(text) > self.settings.max_text_chars:
+                await self.error(rid, "text_too_long")
+                return
+            if not is_supported(target) or (source != "auto" and not is_supported(source)):
+                await self.error(rid, "bad_request", "unsupported language")
+                return
+            if not self.limiter.allow(self.client):
+                await self.error(rid, "rate_limited", "Too many requests")
+                return
+            try:
+                rate = max(-50, min(100, int(m.get("rate", 0))))
+            except (TypeError, ValueError):
+                rate = 0
+            h = {"source_lang": source, "target_lang": target, "voice": m.get("voice") or "auto",
+                 "rate": rate, "tts": bool(m.get("tts", True))}
+            await self.start_job(rid, self.run_translate(rid, h, None, text.strip()))
         elif t == "speak":
             if not self.limiter.allow(self.client):
                 await self.error(rid, "rate_limited", "Too many requests")
