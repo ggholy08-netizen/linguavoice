@@ -19,6 +19,7 @@ import { Dashboard } from "./views/dashboard.js";
 import { Conversation } from "./views/conversation.js";
 import { HistoryView } from "./views/history.js";
 import { SettingsView } from "./views/settings.js";
+import { GamesView } from "./games/hub.js";
 
 const errBanner = (msg, extra = "") => `<b>${esc(T.status.error)}:</b> ${esc(msg)}${extra}`;
 
@@ -113,6 +114,7 @@ function initGlobalKeys() {
     // leaving a screen releases the microphone
     if (prev && prev !== r && Recognition.active) Recognition.cancel();
     if (r === "history" || r === "favorites") HistoryView.show(r);
+    GamesView.route(r);
   });
 }
 
@@ -128,6 +130,7 @@ function boot() {
   Conversation.init();
   HistoryView.init();
   SettingsView.init();
+  GamesView.init();
   initGlobalKeys();
   Router.init();
   Pwa.init();

@@ -2,7 +2,7 @@
    - Caches the app shell so it opens instantly and works offline (history, settings).
    - Translation and Edge TTS always need the internet: requests to the backend are never cached.
    - Bump VERSION on every release: the app then shows "Жаңа нұсқа дайын → Жаңарту". */
-const VERSION = "2.0.0-r1";
+const VERSION = "2.0.0-r1-games1";
 const CACHE = `linguavoice-${VERSION}`;
 const SHELL = [
   "./", "./index.html", "./offline.html", "./config.js", "./manifest.webmanifest", "./css/app.css",
@@ -13,13 +13,18 @@ const SHELL = [
   "./js/voice/playback.js", "./js/voice/tts.js",
   "./js/storage/history.js", "./js/storage/settings.js",
   "./js/ui/components.js", "./js/ui/notifications.js", "./js/ui/status.js", "./js/ui/wave.js",
-  "./js/views/dashboard.js", "./js/views/conversation.js", "./js/views/history.js", "./js/views/settings.js"
+  "./js/views/dashboard.js", "./js/views/conversation.js", "./js/views/history.js", "./js/views/settings.js",
+  "./css/games.css",
+  "./js/games/hub.js", "./js/games/core.js", "./js/games/content.js", "./js/games/text-diff.js", "./js/games/voice-round.js",
+  "./js/games/race.js", "./js/games/dictation.js", "./js/games/flashcards.js", "./js/games/saytranslate.js",
+  "./js/games/twister.js", "./js/games/quickanswer.js", "./js/games/travel.js", "./js/games/detective.js", "./js/games/duel.js"
 ];
 // Always fetched fresh when online (so a changed backend address applies at once).
 const NETWORK_FIRST = new Set(["config.js", "index.html", ""]);
 
 self.addEventListener("install", e => {
-  e.waitUntil(caches.open(CACHE).then(c => c.addAll(SHELL.map(u => new Request(u, { cache: "reload" })))));
+  // file by file: one missing file (for example a forgotten icon) must not stop the whole app from installing
+  e.waitUntil(caches.open(CACHE).then(c => Promise.all(SHELL.map(u => c.add(new Request(u, { cache: "reload" })).catch(() => null)))));
 });
 
 self.addEventListener("activate", e => {

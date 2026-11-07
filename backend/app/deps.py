@@ -22,3 +22,9 @@ def get_tts() -> EdgeTTSService:
 @lru_cache
 def get_limiter() -> RateLimiter:
     return RateLimiter(get_settings().rate_limit_per_min)
+
+
+@lru_cache
+def get_games():
+    from .services.game_service import GameService
+    return GameService(get_translator())

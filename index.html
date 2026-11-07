@@ -19,6 +19,7 @@
   try { var t = JSON.parse(localStorage.getItem("lv.theme")) || "dark"; if (t === "system") t = matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark"; document.documentElement.dataset.theme = t; } catch (e) {}
 </script>
 <link rel="stylesheet" href="css/app.css">
+<link rel="stylesheet" href="css/games.css">
 <script src="config.js"></script>
 <script type="module" src="js/app.js"></script>
 </head>
@@ -39,6 +40,7 @@
   <nav class="nav" aria-label="Бөлімдер">
     <a href="#/translate" data-route="translate"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21"/></svg><span>Аудармашы</span></a>
     <a href="#/conversation" data-route="conversation"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h11a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2H9l-4 3v-3H4a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2z"/><path d="M17 9h3a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2h-1v3l-4-3h-3"/></svg><span>Сұхбат</span></a>
+    <a href="#/games" data-route="games"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 8h12a4 4 0 0 1 4 4v2a3 3 0 0 1-5.4 1.8L15 14H9l-1.6 1.8A3 3 0 0 1 2 14v-2a4 4 0 0 1 4-4z"/><path d="M7 11v3M5.5 12.5h3"/><circle cx="16" cy="11.5" r=".6" fill="currentColor"/><circle cx="18" cy="13.5" r=".6" fill="currentColor"/></svg><span>Ойындар</span></a>
     <a href="#/history" data-route="history"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l3 2"/></svg><span>Тарих</span></a>
     <a href="#/favorites" data-route="favorites"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1L3.2 9.5l6.1-.9z"/></svg><span>Таңдаулы</span></a>
     <a href="#/settings" data-route="settings"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2.2"/><circle cx="10" cy="17" r="2.2"/></svg><span>Баптаулар</span></a>
@@ -164,6 +166,11 @@
     </div>
   </section>
 
+  <!-- ===================== Games ===================== -->
+  <section data-view="games" hidden aria-label="Ойындар">
+    <div id="gamesRoot"></div>
+  </section>
+
   <!-- ===================== History / Favourites ===================== -->
   <section data-view="history" hidden aria-labelledby="histTitle">
     <div class="view-head"><h1 id="histTitle">Аударма тарихы</h1><span class="muted" id="histCount"></span></div>
@@ -223,6 +230,7 @@
         <p>Дыбыс тек микрофон түймесін басқанда ғана жазылады. Сөйлем аяқталған соң жазба сіздің серверіңізге, ал одан Google Gemini API қызметіне сөзді тану, тілді анықтау және аудару үшін жіберіледі. Жазылған мәтін де Gemini-ге жіберіледі.</p>
         <p>Аударма мәтіні дауысқа айналдыру үшін Microsoft Edge TTS қызметіне жіберіледі. Тарихтан қайта тыңдағанда да мәтін Edge TTS-ке қайта жіберіледі.</p>
         <p>Дыбыс жазбалары құрылғыда да, серверде де сақталмайды. Тарихта тек мәтін сақталады — ол тек осы браузерде (IndexedDB) тұрады.</p>
+        <p>Ойындарда айтқан сөзіңіз тексеру үшін Gemini-ге жіберіледі және сақталмайды. Ойын прогресі (XP, серия, карточкалар) тек осы құрылғыда тұрады.</p>
         <button class="btn danger" id="wipeData">Барлық деректерді жою</button>
       </div>
     </div>

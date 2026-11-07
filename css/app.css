@@ -98,12 +98,12 @@ svg { display: block; }
 
 .nav {
   position: fixed; z-index: 40; left: 0; right: 0; bottom: 0; height: calc(var(--nav-h) + env(safe-area-inset-bottom));
-  padding: 6px 6px env(safe-area-inset-bottom); display: grid; grid-template-columns: repeat(5, 1fr); gap: 2px;
+  padding: 6px 2px env(safe-area-inset-bottom); display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 0;
   background: color-mix(in srgb, var(--bg) 82%, transparent); -webkit-backdrop-filter: blur(18px); backdrop-filter: blur(18px);
   border-top: 1px solid var(--border);
 }
 .nav a { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; color: var(--faint);
-  text-decoration: none; font-size: 11px; font-weight: 600; border-radius: 14px; min-width: 0; position: relative; transition: color .2s; }
+  text-decoration: none; font-size: 10.5px; letter-spacing: -.015em; font-weight: 600; border-radius: 14px; min-width: 0; position: relative; transition: color .2s; }
 .nav a span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
 .nav svg { width: 23px; height: 23px; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
 .nav a.active { color: var(--text); }
@@ -113,7 +113,7 @@ svg { display: block; }
 /* ================= layout ================= */
 main { width: 100%; max-width: 1120px; margin: 0 auto;
   padding: calc(var(--top-h) + env(safe-area-inset-top) + 14px) 16px calc(var(--nav-h) + var(--dock-h) + env(safe-area-inset-bottom) + 20px); }
-:root[data-route="history"] main, :root[data-route="favorites"] main, :root[data-route="settings"] main { padding-bottom: calc(var(--nav-h) + env(safe-area-inset-bottom) + 24px); }
+:root[data-route="history"] main, :root[data-route="favorites"] main, :root[data-route="settings"] main, :root[data-route="games"] main { padding-bottom: calc(var(--nav-h) + env(safe-area-inset-bottom) + 24px); }
 .banner { position: relative; z-index: 5; max-width: 1120px; margin: 0 auto; padding: calc(var(--top-h) + env(safe-area-inset-top) + 10px) 16px 0; }
 .banner:not([hidden]) + main { padding-top: 14px; }
 .banner .inner { display: flex; gap: 10px; background: var(--danger-soft); border: 1px solid color-mix(in srgb, var(--danger) 35%, transparent);
@@ -276,7 +276,7 @@ input[type=range] { width: 100%; accent-color: var(--violet); height: 26px; }
 .dock { position: fixed; z-index: 30; left: 0; right: 0; bottom: calc(var(--nav-h) + env(safe-area-inset-bottom)); padding: 8px 16px 10px;
   background: color-mix(in srgb, var(--bg) 84%, transparent); -webkit-backdrop-filter: blur(20px) saturate(1.3); backdrop-filter: blur(20px) saturate(1.3);
   border-top: 1px solid var(--border); }
-:root[data-route="history"] .dock, :root[data-route="favorites"] .dock, :root[data-route="settings"] .dock { display: none; }
+:root[data-route="history"] .dock, :root[data-route="favorites"] .dock, :root[data-route="settings"] .dock, :root[data-route="games"] .dock { display: none; }
 :root[data-route="translate"] #dockConv, :root[data-route="conversation"] #dockTranslate { display: none; }
 .dock-inner { max-width: 760px; margin: 0 auto; display: flex; flex-direction: column; align-items: center; gap: 4px; }
 .stages { display: flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 700; letter-spacing: .04em; color: var(--faint); text-transform: uppercase; }
@@ -346,7 +346,7 @@ input[type=range] { width: 100%; accent-color: var(--violet); height: 26px; }
 /* ================= toasts ================= */
 .toasts { position: fixed; z-index: 70; left: 50%; transform: translateX(-50%); width: min(92vw, 480px);
   bottom: calc(var(--nav-h) + var(--dock-h) + env(safe-area-inset-bottom) + 8px); display: flex; flex-direction: column; gap: 8px; pointer-events: none; }
-:root[data-route="history"] .toasts, :root[data-route="favorites"] .toasts, :root[data-route="settings"] .toasts { bottom: calc(var(--nav-h) + env(safe-area-inset-bottom) + 12px); }
+:root[data-route="history"] .toasts, :root[data-route="favorites"] .toasts, :root[data-route="settings"] .toasts, :root[data-route="games"] .toasts { bottom: calc(var(--nav-h) + env(safe-area-inset-bottom) + 12px); }
 .toast { pointer-events: auto; display: flex; align-items: center; gap: 10px; padding: 11px 8px 11px 16px; border-radius: 16px; font-size: 14.5px;
   background: color-mix(in srgb, var(--bg-2) 92%, transparent); border: 1px solid var(--border-2); box-shadow: var(--shadow-lg);
   -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px); opacity: 0; transform: translateY(8px); transition: opacity .2s, transform .2s; }
@@ -393,7 +393,7 @@ input[type=range] { width: 100%; accent-color: var(--violet); height: 26px; }
   .brand-txt small { display: none; }
   .conn span { display: none; } .conn { padding: 6px 9px; }
   .mic { width: 80px; height: 80px; }
-  .nav a { font-size: 10px; }
+  .nav a { font-size: 9.6px; letter-spacing: -.02em; }
   .stages { font-size: 10px; gap: 3px; } .stages i { width: 8px; }
 }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }

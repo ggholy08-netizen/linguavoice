@@ -9,7 +9,7 @@ export const CONFIG = Object.assign({
   HISTORY_LIMIT: 1000
 }, window.LV_CONFIG || {});
 
-export const APP_VERSION = "2.0.0-r1";
+export const APP_VERSION = "2.0.0-r1 · ойындар";
 export const MAX_TEXT_CHARS = 3000; // must match MAX_TEXT_CHARS on the backend
 
 export const $ = id => document.getElementById(id);

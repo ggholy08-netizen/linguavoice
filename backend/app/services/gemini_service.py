@@ -311,6 +311,62 @@ class GeminiTranslator:
             lang, rec, tr = normalize_code(lang_v), (rec_v or "").strip(), (tr_v or "").strip()
         yield StreamEvent("final", lang, rec, tr, True, first_ms, total_ms)
 
+    async def json_call(self, contents, system_instruction: str, schema: types.Schema,
+                        max_output_tokens: int = 2048, timeout_s: int | None = None) -> dict:
+        """One non-streamed structured (JSON) request. Used by the games. Same error mapping as translation."""
+        client = self._get_client()
+        timeout_s = timeout_s or self.settings.gemini_timeout_s
+        attempt = 0
+        while True:
+            attempt += 1
+            config = types.GenerateContentConfig(
+                system_instruction=system_instruction, response_mime_type="application/json",
+                response_schema=schema, max_output_tokens=max_output_tokens, thinking_config=self._thinking(),
+            )
+            try:
+                async with asyncio.timeout(timeout_s):
+                    resp = await client.aio.models.generate_content(model=self.model, contents=contents, config=config)
+                fb = getattr(resp, "prompt_feedback", None)
+                if fb is not None and getattr(fb, "block_reason", None):
+                    raise TranslationError("blocked", f"blocked: {fb.block_reason}", 422)
+                text = resp.text or ""
+                try:
+                    data = json.loads(text)
+                except json.JSONDecodeError as e:
+                    log.error("Unparseable game output: %r", text[:300])
+                    raise TranslationError("bad_model_output", "Gemini returned an incomplete response", 502) from e
+                if not isinstance(data, dict):
+                    raise TranslationError("bad_model_output", "unexpected JSON", 502)
+                return data
+            except TranslationError:
+                raise
+            except TimeoutError as e:
+                raise TranslationError("gemini_timeout", "Gemini did not respond in time", 504) from e
+            except genai_errors.APIError as e:
+                code = getattr(e, "code", None) or 0
+                msg = str(e)
+                log.warning("Gemini API error %s: %s", code, msg[:300])
+                if code == 400 and "thinking" in msg.lower() and self._send_thinking:
+                    self._send_thinking = False
+                    continue
+                if code == 429:
+                    raise TranslationError("rate_limited", "Gemini rate limit or quota exceeded", 429) from e
+                if code in (500, 502, 503, 504) and attempt == 1:
+                    await asyncio.sleep(0.35)
+                    continue
+                if code in (401, 403):
+                    raise TranslationError("gemini_auth", "Gemini API key rejected", 502) from e
+                if code == 404:
+                    raise TranslationError("gemini_model", f"Model {self.model} not available", 502) from e
+                if code == 400:
+                    raise TranslationError("gemini_bad_request", msg[:200], 502) from e
+                raise TranslationError("gemini_unavailable", msg[:200], 503) from e
+            except (OSError, ConnectionError) as e:
+                if attempt == 1:
+                    await asyncio.sleep(0.25)
+                    continue
+                raise TranslationError("gemini_unavailable", str(e)[:200], 503) from e
+
     async def translate_text(self, text: str, source: str, target: str) -> StreamEvent:
         final: StreamEvent | None = None
         async for ev in self.stream_translate_text(text, source, target):

@@ -12,7 +12,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 
-from .api import speech, translate, ws
+from .api import games, speech, translate, ws
 from .config import get_settings
 from .deps import get_translator, get_tts
 
@@ -47,6 +47,7 @@ app.add_middleware(
 app.include_router(translate.router)
 app.include_router(speech.router)
 app.include_router(ws.router)
+app.include_router(games.router)
 
 
 @app.get("/")

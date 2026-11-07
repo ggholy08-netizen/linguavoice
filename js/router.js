@@ -1,9 +1,9 @@
-// Hash router: #/translate (home), #/conversation, #/history, #/favorites, #/settings.
+// Hash router: #/translate (home), #/conversation, #/games[/id], #/history, #/favorites, #/settings.
 // Works on GitHub Pages without any server configuration.
 import { bus } from "./state.js";
 
-export const ROUTES = ["translate", "conversation", "history", "favorites", "settings"];
-const VIEW_OF = { translate: "translate", conversation: "conversation", history: "history", favorites: "history", settings: "settings" };
+export const ROUTES = ["translate", "conversation", "games", "history", "favorites", "settings"];
+const VIEW_OF = { translate: "translate", conversation: "conversation", history: "history", favorites: "history", settings: "settings", games: "games" };
 
 export const Router = {
   current: null,
