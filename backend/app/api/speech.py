@@ -39,6 +39,7 @@ class SpeechRequest(BaseModel):
     lang: str
     voice: str | None = "auto"
     rate: int = Field(0, ge=-50, le=100)
+    volume: int = Field(0, ge=-50, le=50)
 
 
 @router.post("/tts")
@@ -54,7 +55,7 @@ async def tts(req: SpeechRequest, request: Request):
     service = get_tts()
     try:
         voice = await service.resolve_voice(req.lang, req.voice)
-        parts = [await service.synthesize(seg, voice, req.rate) for seg in split_text(text, 600)]
+        parts = [await service.synthesize(seg, voice, req.rate, req.volume) for seg in split_text(text, 600)]
     except TTSError as e:
         return _err(e.code, e.message, e.status)
     # Consecutive MP3 streams with identical parameters concatenate into one valid MP3.

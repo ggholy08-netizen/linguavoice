@@ -22,6 +22,11 @@ from app.languages import normalize_code  # noqa: E402
 from app.main import app  # noqa: E402
 from app.services.gemini_service import StreamEvent, _auto_thinking  # noqa: E402
 from app.services.text_utils import SentenceSegmenter, extract_string_field, split_text  # noqa: E402
+from app.services.edge_tts_service import volume_str, rate_str  # noqa: E402
+
+
+def test_tts_param_strings():
+    assert rate_str(15) == "+15%" and rate_str(-80) == "-50%" and volume_str(90) == "+50%" and volume_str(-10) == "-10%"
 
 ORIGIN = "https://tester.github.io"
 
@@ -130,8 +135,8 @@ class FakeTTS(deps.EdgeTTSService):
         self._voices_at = 1e18
         self.calls = []
 
-    async def synthesize(self, text, voice, rate=0):
-        self.calls.append((text, voice, rate))
+    async def synthesize(self, text, voice, rate=0, volume=0):
+        self.calls.append((text, voice, rate, volume))
         await asyncio.sleep(0.01)
         return b"ID3" + text.encode()
 
@@ -178,7 +183,7 @@ def test_ws_translate_pipeline(client):
     with client.websocket_connect("/ws", headers={"Origin": ORIGIN}) as ws:
         assert json.loads(ws.receive_text())["type"] == "ready"
         hdr = {"type": "translate", "id": "r1", "source_lang": "auto", "target_lang": "en",
-               "voice": "auto", "rate": 10, "tts": True, "mime": "audio/wav"}
+               "voice": "auto", "rate": 10, "volume": -20, "tts": True, "mime": "audio/wav"}
         ws.send_bytes(pack_frame(hdr, wav_bytes()))
         msgs, audio = [], []
         while True:
@@ -200,7 +205,7 @@ def test_ws_translate_pipeline(client):
         assert [h["seq"] for h, _ in audio] == [0, 1]
         assert [p for _, p in audio] == [b"ID3Hello there.", b"ID3How are you?"]
         assert all(h["id"] == "r1" and h["mime"] == "audio/mpeg" for h, _ in audio)
-        assert client.fake_tts.calls[0][2] == 10
+        assert client.fake_tts.calls[0][2] == 10 and client.fake_tts.calls[0][3] == -20
         done = msgs[-1]
         assert done["segments"] == 2
 

@@ -33,6 +33,11 @@ def rate_str(rate: int) -> str:
     return f"{rate:+d}%"
 
 
+def volume_str(volume: int) -> str:
+    volume = max(-50, min(50, int(volume)))
+    return f"{volume:+d}%"
+
+
 class EdgeTTSService:
     def __init__(self, settings: Settings):
         self.settings = settings
@@ -107,10 +112,10 @@ class EdgeTTSService:
         return chosen
 
     # ---------- synthesis ----------
-    async def synthesize(self, text: str, voice: str, rate: int = 0) -> bytes:
+    async def synthesize(self, text: str, voice: str, rate: int = 0, volume: int = 0) -> bytes:
         """Synthesize one segment with Edge TTS and return complete MP3 bytes."""
         try:
-            comm = edge_tts.Communicate(text, voice, rate=rate_str(rate))
+            comm = edge_tts.Communicate(text, voice, rate=rate_str(rate), volume=volume_str(volume))
         except ValueError as e:  # invalid voice / rate format
             raise TTSError("tts_voice_unsupported", str(e), 400) from e
         out = bytearray()
@@ -145,10 +150,12 @@ class TTSPipeline:
     client can start playing segment 0 while later segments are still being generated.
     """
 
-    def __init__(self, tts: EdgeTTSService, voice: str, rate: int, send_audio: SendAudio, parallel: int = 2):
+    def __init__(self, tts: EdgeTTSService, voice: str, rate: int, send_audio: SendAudio, parallel: int = 2,
+                 volume: int = 0):
         self.tts = tts
         self.voice = voice
         self.rate = rate
+        self.volume = volume
         self.send_audio = send_audio
         self.sem = asyncio.Semaphore(max(1, parallel))
         self.queue: asyncio.Queue[asyncio.Task | None] = asyncio.Queue()
@@ -162,7 +169,7 @@ class TTSPipeline:
 
     async def _synth(self, text: str) -> bytes:
         async with self.sem:
-            return await self.tts.synthesize(text, self.voice, self.rate)
+            return await self.tts.synthesize(text, self.voice, self.rate, self.volume)
 
     def add(self, text: str) -> None:
         if not text.strip() or self.error:

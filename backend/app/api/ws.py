@@ -39,6 +39,13 @@ router = APIRouter()
 log = logging.getLogger("linguavoice.ws")
 
 
+def clamp(v, lo: int, hi: int) -> int:
+    try:
+        return max(lo, min(hi, int(v or 0)))
+    except (TypeError, ValueError):
+        return 0
+
+
 def pack_frame(header: dict, payload: bytes) -> bytes:
     h = json.dumps(header, separators=(",", ":")).encode()
     return struct.pack(">I", len(h)) + h + payload
@@ -126,11 +133,13 @@ class Session:
         source, target = h["source_lang"], h["target_lang"]
         want_tts = bool(h.get("tts", True))
         rate = int(h.get("rate", 0))
+        volume = int(h.get("volume", 0))
         pipeline: TTSPipeline | None = None
         voice = None
         if want_tts:
             voice = await self.tts.resolve_voice(target, h.get("voice") or "auto")
-            pipeline = TTSPipeline(self.tts, voice, rate, self._audio_sender(rid), self.settings.tts_parallel_segments)
+            pipeline = TTSPipeline(self.tts, voice, rate, self._audio_sender(rid), self.settings.tts_parallel_segments,
+                                   volume)
         seg = SentenceSegmenter()
         await self.send_json({"type": "status", "id": rid, "stage": "translating" if typed else "recognizing"})
         sent_translating = typed
@@ -206,7 +215,8 @@ class Session:
             return
         voice = await self.tts.resolve_voice(lang, m.get("voice") or "auto")
         await self.send_json({"type": "status", "id": rid, "stage": "tts"})
-        pipeline = TTSPipeline(self.tts, voice, int(m.get("rate", 0)), self._audio_sender(rid), self.settings.tts_parallel_segments)
+        pipeline = TTSPipeline(self.tts, voice, int(m.get("rate", 0)), self._audio_sender(rid),
+                               self.settings.tts_parallel_segments, int(m.get("volume", 0)))
         try:
             for s in split_text(text):
                 pipeline.add(s)
@@ -246,10 +256,7 @@ class Session:
             return
         h["mime"] = mime
         h["source_lang"], h["target_lang"] = source, target
-        try:
-            h["rate"] = max(-50, min(100, int(h.get("rate", 0))))
-        except (TypeError, ValueError):
-            h["rate"] = 0
+        h["rate"], h["volume"] = clamp(h.get("rate"), -50, 100), clamp(h.get("volume"), -50, 50)
         if not self.limiter.allow(self.client):
             await self.error(rid, "rate_limited", "Too many requests")
             return
@@ -285,21 +292,15 @@ class Session:
             if not self.limiter.allow(self.client):
                 await self.error(rid, "rate_limited", "Too many requests")
                 return
-            try:
-                rate = max(-50, min(100, int(m.get("rate", 0))))
-            except (TypeError, ValueError):
-                rate = 0
             h = {"source_lang": source, "target_lang": target, "voice": m.get("voice") or "auto",
-                 "rate": rate, "tts": bool(m.get("tts", True))}
+                 "rate": clamp(m.get("rate"), -50, 100), "volume": clamp(m.get("volume"), -50, 50),
+                 "tts": bool(m.get("tts", True))}
             await self.start_job(rid, self.run_translate(rid, h, None, text.strip()))
         elif t == "speak":
             if not self.limiter.allow(self.client):
                 await self.error(rid, "rate_limited", "Too many requests")
                 return
-            try:
-                m["rate"] = max(-50, min(100, int(m.get("rate", 0))))
-            except (TypeError, ValueError):
-                m["rate"] = 0
+            m["rate"], m["volume"] = clamp(m.get("rate"), -50, 100), clamp(m.get("volume"), -50, 50)
             await self.start_job(rid, self.run_speak(rid, m))
         else:
             await self.error(rid, "bad_request", "unknown message type")
