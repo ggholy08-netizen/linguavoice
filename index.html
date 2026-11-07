@@ -20,7 +20,7 @@
    Other values are optional tuning.
    ===================================================================== */
 const CONFIG = {
-  API_BASE_URL: "https://linguavoice-ux4j.onrender.com",
+  API_BASE_URL: "https://YOUR-BACKEND-URL.example",
   REQUEST_TIMEOUT_MS: 30000,      // max wait for a translation / for the voice
   DEFAULT_SILENCE_MS: 500,        // end-of-speech pause (250–1200 ms, user-adjustable)
   MAX_RECORDING_MS: 60000,        // hard cap for one utterance
@@ -134,6 +134,21 @@ main{width:100%;max-width:760px;margin:0 auto;padding:6px 16px calc(var(--dock-h
 .text.live::after{content:"";display:inline-block;width:2px;height:1em;background:var(--violet);margin-left:2px;vertical-align:-2px;animation:blink .8s infinite}
 .accent{border-color:var(--border);border-color:color-mix(in srgb,var(--violet) 30%,var(--border));background:var(--surface);background:linear-gradient(180deg,color-mix(in srgb,var(--violet) 6%,var(--surface)),var(--surface) 70%)}
 .player{display:flex;gap:8px;margin-top:14px;flex-wrap:wrap}
+.text-card h2{white-space:nowrap}
+.text-card .chip{min-width:0;overflow:hidden;text-overflow:ellipsis}
+.src-card{display:flex;flex-direction:column}
+.src-card .src-foot{margin-top:auto;padding-top:12px}
+.text-card:focus-within{border-color:color-mix(in srgb,var(--blue) 55%,var(--border))}
+.src-input{display:block;width:100%;border:0;background:transparent;resize:none;padding:0;margin:0;color:var(--text);
+  font:inherit;font-size:17px;line-height:1.45;min-height:52px;max-height:42vh;overflow-y:auto}
+.src-input:focus,.src-input:focus-visible{outline:none}
+.src-input::placeholder{color:var(--faint);font-size:16px;opacity:1}
+.src-foot{display:flex;align-items:center;gap:10px;min-height:44px}
+.src-foot .pill{margin-left:auto}
+.kbd-hint,.counter{font-size:12.5px;color:var(--muted)}
+.counter.over{color:var(--danger);font-weight:600}
+.kbd-hint{display:none}
+@media (hover:hover) and (pointer:fine){.kbd-hint{display:inline}}
 .pill{height:44px;padding:0 16px;border-radius:999px;display:inline-flex;align-items:center;gap:8px;font-weight:600;background:var(--surface-2);transition:filter .15s,background .15s}
 .pill:hover{filter:brightness(1.04);background:var(--surface-3)}
 .pill.primary{background:var(--grad);color:#fff;box-shadow:0 6px 16px rgba(80,90,255,.3)}
@@ -320,16 +335,28 @@ input[type=range]{width:100%;accent-color:var(--violet);height:28px}
     </div>
 
     <div class="grid2">
-      <article class="card text-card" aria-labelledby="hSrc">
+      <article class="card text-card src-card" aria-labelledby="hSrc">
         <header>
-          <h2 id="hSrc">Танылған мәтін</h2>
+          <h2 id="hSrc">Бастапқы мәтін</h2>
           <span class="chip" id="detChip" hidden></span>
           <span class="spacer"></span>
-          <button class="copy-btn" id="copySrc" aria-label="Танылған мәтінді көшіру" title="Көшіру">
+          <button class="copy-btn" id="clearSrc" aria-label="Мәтінді тазалау" title="Тазалау" hidden>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg>
+          </button>
+          <button class="copy-btn" id="copySrc" aria-label="Бастапқы мәтінді көшіру" title="Көшіру">
             <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><rect x="8" y="8" width="12" height="12" rx="3"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></svg>
           </button>
         </header>
-        <p class="text" id="srcText" aria-live="polite" data-placeholder="Микрофонды басып, сөйлеңіз — танылған сөзіңіз осы жерде шығады."></p>
+        <textarea class="src-input" id="srcText" rows="2" maxlength="3000" enterkeyhint="send" spellcheck="true"
+          aria-label="Аударылатын мәтін" placeholder="Мәтінді осында жазыңыз немесе төмендегі микрофонды басып, сөйлеңіз."></textarea>
+        <div class="src-foot">
+          <span class="kbd-hint">Enter — аудару · Shift+Enter — жаңа жол</span>
+          <span class="counter" id="srcCount" hidden></span>
+          <button class="pill primary" id="translateBtn" disabled aria-label="Мәтінді аудару">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m13 6 6 6-6 6"/></svg>
+            Аудару
+          </button>
+        </div>
       </article>
 
       <article class="card text-card accent" aria-labelledby="hTgt">
@@ -485,7 +512,8 @@ const T = {
   status: {
     idle: "Жүктелуде…", ready: "Дайын", listening: "Тыңдап тұрмын… сөйлеңіз", hearing: "Тыңдап тұрмын…",
     processing: "Сөз өңделуде…", translating: "Аударылуда…", tts: "Дауыс жасалуда…",
-    playing: "Аударма ойнатылуда…", error: "Қате", offline: "Серверге қосылмаған"
+    playing: "Аударма ойнатылуда…", error: "Қате", offline: "Серверге қосылмаған",
+    waking: "Сервер оянуда… бұл 1 минутқа дейін созылуы мүмкін"
   },
   conn: { connecting: "Қосылуда…", online: "Қосылды", offline: "Байланыс жоқ", unconfigured: "Бапталмаған" },
   err: {
@@ -516,7 +544,8 @@ const T = {
     tts_no_audio: "Edge TTS дыбыс қайтармады.",
     voices_unavailable: "Edge TTS дауыстар тізімін жүктеу мүмкін болмады. Автоматты дауыс қолданылады.",
     audio_too_large: "Жазба тым ұзақ. Қысқарақ сөйлеңіз.",
-    text_too_long: "Мәтін тым ұзақ.",
+    text_too_long: "Мәтін тым ұзақ (ең көбі 3000 таңба).",
+    empty_text: "Аудару үшін мәтін жазыңыз.",
     playback_blocked: "Браузер дыбысты автоматты ойнатуға рұқсат бермеді. «Ойнату» түймесін басыңыз.",
     playback_failed: "Аудионы ойнату мүмкін болмады.",
     bad_request: "Сұрау қате құрылған.",
@@ -552,6 +581,7 @@ const LANGS = [
   ["ms","Малай тілі","Bahasa Melayu"],["vi","Вьетнам тілі","Tiếng Việt"],["th","Тай тілі","ไทย"]
 ].map(([code, kk, native]) => ({ code, kk, native }));
 const LANG = Object.fromEntries(LANGS.map(l => [l.code, l]));
+const MAX_TEXT_CHARS = 3000; // must match MAX_TEXT_CHARS on the backend
 const langName = c => c === "auto" ? T.auto : (LANG[c] ? LANG[c].kk : (c || "").toUpperCase());
 
 /* ============================== Utilities ============================== */
@@ -573,14 +603,15 @@ function toast(msg, isErr = false, ms = 3200) {
   el.textContent = msg; el.classList.toggle("err", isErr); el.classList.add("show");
   clearTimeout(toastTimer); toastTimer = setTimeout(() => el.classList.remove("show"), ms);
 }
-function banner(html) {
-  if (!html) { $("banner").hidden = true; return; }
-  $("bannerText").innerHTML = html; $("banner").hidden = false;
+let bannerKind = null;
+function banner(html, kind) {
+  if (!html) { $("banner").hidden = true; bannerKind = null; return; }
+  $("bannerText").innerHTML = html; $("banner").hidden = false; bannerKind = kind || "other";
 }
 let statusKind = "idle";
 function setStatus(kind, text) {
   const map = { idle: "idle", ready: "ready", listening: "listening", hearing: "listening", processing: "busy",
-    translating: "busy", tts: "busy", playing: "playing", error: "error", offline: "error" };
+    translating: "busy", tts: "busy", waking: "busy", playing: "playing", error: "error", offline: "error" };
   statusKind = kind;
   $("status").dataset.kind = map[kind] || "ready";
   $("statusText").textContent = text || T.status[kind] || "";
@@ -663,7 +694,8 @@ const Net = {
       this.backoff = 800; this.setConn("online");
       clearInterval(this.pingTimer);
       this.pingTimer = setInterval(() => this.send({ type: "ping", t: Date.now() }), 25000);
-      if (statusKind === "offline" || statusKind === "idle") setStatus("ready");
+      if (statusKind === "offline" || statusKind === "idle" || statusKind === "waking") setStatus("ready");
+      if (bannerKind === "unreachable") banner(null);
     };
     ws.onmessage = ev => {
       if (typeof ev.data === "string") {
@@ -1028,15 +1060,17 @@ const App = {
   },
 
   async checkHealth() {
+    // A free Render server may sleep; waking it takes up to about a minute.
+    const wake = setTimeout(() => { if (!Net.open && statusKind === "idle") setStatus("waking", T.status.waking); }, 4000);
     try {
-      const r = await fetchTimeout(api("/api/health"), {}, 20000);
+      const r = await fetchTimeout(api("/api/health"), {}, 75000);
       const j = await r.json();
       $("infoModel").textContent = j.model || "—";
       if (!j.gemini_configured) banner(`<b>${esc(T.status.error)}:</b> ${esc(T.err.server_misconfigured)}`);
       if (statusKind === "idle") setStatus("ready");
     } catch {
-      if (!Net.open) { setStatus("offline"); banner(`<b>${esc(T.status.error)}:</b> ${esc(T.err.backend_unreachable)}<br><code>${esc(BACKEND.base)}</code>`); }
-    }
+      if (!Net.open) { setStatus("offline"); banner(`<b>${esc(T.status.error)}:</b> ${esc(T.err.backend_unreachable)}<br><code>${esc(BACKEND.base)}</code>`, "unreachable"); }
+    } finally { clearTimeout(wake); }
   },
 
   /* ---------- UI binding ---------- */
@@ -1052,7 +1086,13 @@ const App = {
     $("convBBtn").onclick = () => this.openPicker("convB");
     $("swapBtn").onclick = () => this.swap();
     $("convSwap").onclick = () => { const a = prefs.convA; savePref("convA", prefs.convB); savePref("convB", a); this.renderLangs(); this.spin("convSwap"); };
-    $("copySrc").onclick = () => copyText($("srcText").textContent);
+    $("copySrc").onclick = () => copyText($("srcText").value.trim());
+    $("clearSrc").onclick = () => { $("srcText").value = ""; this.onSrcInput(); $("srcText").focus(); };
+    $("srcText").addEventListener("input", () => this.onSrcInput());
+    $("srcText").addEventListener("keydown", e => {
+      if (e.key === "Enter" && !e.shiftKey && !e.isComposing && e.keyCode !== 229) { e.preventDefault(); this.translateTyped(); }
+    });
+    $("translateBtn").onclick = () => this.translateTyped();
     $("copyTgt").onclick = () => copyText($("tgtText").textContent);
     $("micBtn").onclick = () => this.micPressed({ mode: "translate" });
     $("cancelBtn").onclick = () => this.cancelRecording();
@@ -1131,8 +1171,8 @@ const App = {
     }
     savePref("src", prefs.tgt); savePref("tgt", newTgt);
     if (!Voices.hasVoice(newTgt)) toast(T.err.no_voice_for_target, true);
-    const s = $("srcText").textContent, t = $("tgtText").textContent;
-    if (s || t) { $("srcText").textContent = t; $("tgtText").textContent = s; this.last = null; this.updatePlayButtons(); }
+    const s = $("srcText").value, t = $("tgtText").textContent;
+    if (s || t) { this.setSrc(t); $("tgtText").textContent = s; this.last = null; this.updatePlayButtons(); }
     $("detChip").hidden = true;
     this.renderLangs(); this.spin("swapBtn");
   },
@@ -1291,8 +1331,8 @@ const App = {
     });
     setStatus("processing");
     if (rc.mode === "translate") {
-      $("srcText").textContent = ""; $("tgtText").textContent = ""; $("detChip").hidden = true; $("tgtChip").hidden = true;
-      $("srcText").classList.add("live"); this.last = null; this.updatePlayButtons(); this.renderMetrics(job);
+      this.setSrc(""); $("tgtText").textContent = ""; $("detChip").hidden = true; $("tgtChip").hidden = true;
+      this.last = null; this.updatePlayButtons(); this.renderMetrics(job);
     } else {
       job.bubble = this.addBubble(rc);
     }
@@ -1310,12 +1350,66 @@ const App = {
     }
   },
 
+  /* ---------- typed text ---------- */
+  setSrc(text) { $("srcText").value = text || ""; this.onSrcInput(); },
+  onSrcInput() {
+    const el = $("srcText"), len = el.value.length;
+    el.style.height = "auto"; el.style.height = el.scrollHeight + "px";
+    $("translateBtn").disabled = !el.value.trim();
+    if (!this.last || el.value.trim() !== this.last.source) $("detChip").hidden = true; // stale after editing
+    $("clearSrc").hidden = !len;
+    const c = $("srcCount");
+    c.hidden = len < MAX_TEXT_CHARS * 0.8;
+    c.textContent = `${len} / ${MAX_TEXT_CHARS}`;
+    c.classList.toggle("over", len >= MAX_TEXT_CHARS);
+  },
+  translateTyped() {
+    const el = $("srcText"), text = el.value.trim();
+    if (!text) { toast(T.err.empty_text); el.focus(); return; }
+    if (text.length > MAX_TEXT_CHARS) { this.fail("text_too_long"); return; }
+    if (!BACKEND.ok) { this.fail(BACKEND.code); return; }
+    Player.unlock();                              // inside the click/keypress: allows audio on iOS
+    if (Recorder.active || this.rec) this.cancelRecording();
+    const source = prefs.src, target = prefs.tgt;
+    if (!Voices.hasVoice(target)) { this.fail("no_voice_for_target"); return; }
+    const running = this.job && this.job.ctx && this.job.ctx.typed;
+    if (running && this.job.ctx.text === text && this.job.ctx.source === source && this.job.ctx.target === target) return; // already on it
+    const l = this.last;
+    if (!this.job && l && l.complete && l.source === text && l.src === source && l.lang === target && $("tgtText").textContent === l.text) {
+      this.playPressed(true); return;             // same text again: no new request, just play it
+    }
+    if (matchMedia("(pointer:coarse)").matches) el.blur(); // hide the phone keyboard so the result is visible
+    const rc = { mode: "translate", typed: true, text, source, target, id: uid() };
+    const voice = Voices.chosen(target);
+    const job = this.newJob("translate", { ctx: rc, voice, rate: prefs.rate, wantPlay: prefs.autoplay, m: { tEnd: now() } });
+    setStatus("translating");
+    $("tgtText").textContent = ""; $("detChip").hidden = true; $("tgtChip").hidden = true;
+    this.last = null; this.updatePlayButtons(); this.renderMetrics(job);
+    if (job.wantPlay) Player.begin(job.id);
+    const msg = { type: "translate_text", id: job.id, text, source_lang: source, target_lang: target, voice, rate: prefs.rate, tts: true };
+    (async () => {
+      if (Net.open || await Net.waitOpen(2500)) {
+        if (this.job === job) { Net.send(msg); job.m.sent = now(); }
+        return;
+      }
+      if (this.job !== job) return;
+      job.viaHttp = true;
+      await this.translateHttp(job, rc, null);
+    })().catch(e => { if (this.job === job) this.jobError(job, e.code || "translate_failed"); });
+  },
+
   async translateHttp(job, rc, wav) {
-    const fd = new FormData();
-    fd.append("audio", new Blob([wav], { type: "audio/wav" }), "speech.wav");
-    fd.append("source_lang", rc.source); fd.append("target_lang", rc.target);
     job.m.sent = now();
-    const r = await fetchTimeout(api("/api/translate"), { method: "POST", body: fd, signal: job.abort.signal });
+    let r;
+    if (rc.typed) {
+      r = await fetchTimeout(api("/api/translate_text"), { method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: rc.text, source_lang: rc.source, target_lang: rc.target }), signal: job.abort.signal });
+    } else {
+      const fd = new FormData();
+      fd.append("audio", new Blob([wav], { type: "audio/wav" }), "speech.wav");
+      fd.append("source_lang", rc.source); fd.append("target_lang", rc.target);
+      r = await fetchTimeout(api("/api/translate"), { method: "POST", body: fd, signal: job.abort.signal });
+    }
     const j = await r.json().catch(() => ({}));
     if (!r.ok) throw new AppError((j.error && j.error.code) || "translate_failed");
     if (this.job !== job) return;
@@ -1382,8 +1476,8 @@ const App = {
     if (job.kind !== "translate") return;
     const rc = job.ctx;
     if (rc.mode === "translate") {
-      if (m.recognized_text) $("srcText").textContent = m.recognized_text;
-      if (m.translated_text) { $("srcText").classList.remove("live"); $("tgtText").textContent = m.translated_text; $("tgtText").classList.add("live"); }
+      if (m.recognized_text && !rc.typed) this.setSrc(m.recognized_text);
+      if (m.translated_text) { $("tgtText").textContent = m.translated_text; $("tgtText").classList.add("live"); }
     } else if (job.bubble) {
       job.bubble.querySelector(".b-src").textContent = m.recognized_text || "";
       job.bubble.querySelector(".b-tr").textContent = m.translated_text || "";
@@ -1399,12 +1493,14 @@ const App = {
     job.result = { src: m.recognized_text, tr: m.translated_text, det, voice: m.voice || job.voice };
     if (rc.mode === "translate") {
       this.lastDetected = det;
-      $("srcText").classList.remove("live"); $("tgtText").classList.remove("live");
-      $("srcText").textContent = m.recognized_text; $("tgtText").textContent = m.translated_text;
+      $("tgtText").classList.remove("live");
+      if (!rc.typed) this.setSrc(m.recognized_text);
+      $("tgtText").textContent = m.translated_text;
       $("detChip").textContent = rc.source === "auto" ? T.autoDetected(langName(det)) : langName(det);
       $("detChip").hidden = !det;
       $("tgtChip").textContent = langName(rc.target); $("tgtChip").hidden = false;
-      this.last = { text: m.translated_text, lang: rc.target, segments: [], voice: job.voice, rate: job.rate, complete: false };
+      this.last = { text: m.translated_text, lang: rc.target, segments: [], voice: job.voice, rate: job.rate, complete: false,
+        source: m.recognized_text, src: rc.source };
       this.renderMetrics(job);
     } else if (job.bubble) {
       job.bubble.querySelector(".b-src").textContent = m.recognized_text;
@@ -1451,7 +1547,7 @@ const App = {
       if (!job.gotResult) { job.bubble.classList.add("err"); job.bubble.querySelector(".b-tr").textContent = errText(code); }
     }
     if (job.kind === "translate" && job.ctx.mode === "translate" && !job.gotResult) {
-      $("srcText").classList.remove("live"); $("tgtText").classList.remove("live");
+      $("tgtText").classList.remove("live");
     }
     this.micState("idle");
     this.fail(code, ttsStage && job.gotResult);
@@ -1509,7 +1605,7 @@ const App = {
     }
     // voice / speed changed (or nothing cached): synthesize again with Edge TTS
     const lang = (l && l.lang) || prefs.tgt;
-    this.speak({ text, lang, voice, rate, onAudioDone: segs => { this.last = { text, lang, segments: segs, voice, rate, complete: true }; } });
+    this.speak({ text, lang, voice, rate, onAudioDone: segs => { this.last = { ...(l || {}), text, lang, segments: segs, voice, rate, complete: true }; } });
   },
 
   /* ---------- conversation ---------- */
